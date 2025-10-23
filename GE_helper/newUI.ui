@@ -389,7 +389,7 @@
                  </sizepolicy>
                 </property>
                 <property name="currentIndex">
-                 <number>0</number>
+                 <number>1</number>
                 </property>
                 <widget class="QWidget" name="configPage">
                  <layout class="QVBoxLayout" name="verticalLayout_8">
@@ -1080,7 +1080,7 @@
                          </spacer>
                         </item>
                         <item>
-                         <widget class="QLabel" name="label_14">
+                         <widget class="QLabel" name="name_label">
                           <property name="minimumSize">
                            <size>
                             <width>128</width>
@@ -1210,7 +1210,7 @@
                          </spacer>
                         </item>
                         <item>
-                         <widget class="QLabel" name="label_16">
+                         <widget class="QLabel" name="avgBuy_label">
                           <property name="minimumSize">
                            <size>
                             <width>128</width>
@@ -1340,7 +1340,7 @@
                          </spacer>
                         </item>
                         <item>
-                         <widget class="QLabel" name="label_18">
+                         <widget class="QLabel" name="avgSell_label">
                           <property name="minimumSize">
                            <size>
                             <width>128</width>
@@ -1470,7 +1470,7 @@
                          </spacer>
                         </item>
                         <item>
-                         <widget class="QLabel" name="label_20">
+                         <widget class="QLabel" name="buyVol_label">
                           <property name="sizePolicy">
                            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                             <horstretch>0</horstretch>
@@ -1606,7 +1606,7 @@
                          </spacer>
                         </item>
                         <item>
-                         <widget class="QLabel" name="label_22">
+                         <widget class="QLabel" name="sellVol_label">
                           <property name="minimumSize">
                            <size>
                             <width>128</width>
@@ -1736,7 +1736,7 @@
                          </spacer>
                         </item>
                         <item>
-                         <widget class="QLabel" name="label_24">
+                         <widget class="QLabel" name="limit_label">
                           <property name="minimumSize">
                            <size>
                             <width>128</width>
@@ -1753,6 +1753,136 @@
                         </item>
                         <item>
                          <spacer name="horizontalSpacer_33">
+                          <property name="orientation">
+                           <enum>Qt::Orientation::Horizontal</enum>
+                          </property>
+                          <property name="sizeType">
+                           <enum>QSizePolicy::Policy::Minimum</enum>
+                          </property>
+                          <property name="sizeHint" stdset="0">
+                           <size>
+                            <width>50</width>
+                            <height>20</height>
+                           </size>
+                          </property>
+                         </spacer>
+                        </item>
+                       </layout>
+                      </item>
+                      <item>
+                       <layout class="QHBoxLayout" name="horizontalLayout_35">
+                        <item>
+                         <spacer name="horizontalSpacer_56">
+                          <property name="orientation">
+                           <enum>Qt::Orientation::Horizontal</enum>
+                          </property>
+                          <property name="sizeType">
+                           <enum>QSizePolicy::Policy::Fixed</enum>
+                          </property>
+                          <property name="sizeHint" stdset="0">
+                           <size>
+                            <width>16</width>
+                            <height>16</height>
+                           </size>
+                          </property>
+                         </spacer>
+                        </item>
+                        <item>
+                         <widget class="Line" name="line_8">
+                          <property name="orientation">
+                           <enum>Qt::Orientation::Horizontal</enum>
+                          </property>
+                         </widget>
+                        </item>
+                        <item>
+                         <spacer name="horizontalSpacer_57">
+                          <property name="orientation">
+                           <enum>Qt::Orientation::Horizontal</enum>
+                          </property>
+                          <property name="sizeType">
+                           <enum>QSizePolicy::Policy::Fixed</enum>
+                          </property>
+                          <property name="sizeHint" stdset="0">
+                           <size>
+                            <width>16</width>
+                            <height>16</height>
+                           </size>
+                          </property>
+                         </spacer>
+                        </item>
+                       </layout>
+                      </item>
+                      <item>
+                       <layout class="QHBoxLayout" name="horizontalLayout_34">
+                        <item>
+                         <spacer name="horizontalSpacer_53">
+                          <property name="orientation">
+                           <enum>Qt::Orientation::Horizontal</enum>
+                          </property>
+                          <property name="sizeType">
+                           <enum>QSizePolicy::Policy::Minimum</enum>
+                          </property>
+                          <property name="sizeHint" stdset="0">
+                           <size>
+                            <width>10</width>
+                            <height>20</height>
+                           </size>
+                          </property>
+                         </spacer>
+                        </item>
+                        <item>
+                         <widget class="QLabel" name="label_26">
+                          <property name="sizePolicy">
+                           <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+                            <horstretch>0</horstretch>
+                            <verstretch>0</verstretch>
+                           </sizepolicy>
+                          </property>
+                          <property name="minimumSize">
+                           <size>
+                            <width>80</width>
+                            <height>0</height>
+                           </size>
+                          </property>
+                          <property name="text">
+                           <string>High Alch</string>
+                          </property>
+                         </widget>
+                        </item>
+                        <item>
+                         <spacer name="horizontalSpacer_54">
+                          <property name="orientation">
+                           <enum>Qt::Orientation::Horizontal</enum>
+                          </property>
+                          <property name="sizeType">
+                           <enum>QSizePolicy::Policy::Maximum</enum>
+                          </property>
+                          <property name="sizeHint" stdset="0">
+                           <size>
+                            <width>50</width>
+                            <height>20</height>
+                           </size>
+                          </property>
+                         </spacer>
+                        </item>
+                        <item>
+                         <widget class="QLabel" name="highAlch_label">
+                          <property name="minimumSize">
+                           <size>
+                            <width>128</width>
+                            <height>0</height>
+                           </size>
+                          </property>
+                          <property name="text">
+                           <string>Unknown</string>
+                          </property>
+                          <property name="alignment">
+                           <set>Qt::AlignmentFlag::AlignCenter</set>
+                          </property>
+                         </widget>
+                        </item>
+                        <item>
+                         <spacer name="horizontalSpacer_55">
                           <property name="orientation">
                            <enum>Qt::Orientation::Horizontal</enum>
                           </property>
@@ -1866,7 +1996,7 @@
                          </spacer>
                         </item>
                         <item>
-                         <widget class="QLabel" name="label_26">
+                         <widget class="QLabel" name="id_label">
                           <property name="minimumSize">
                            <size>
                             <width>128</width>
@@ -2011,6 +2141,9 @@
                   <height>10</height>
                  </size>
                 </property>
+                <property name="layoutDirection">
+                 <enum>Qt::LayoutDirection::RightToLeft</enum>
+                </property>
                 <property name="text">
                  <string>H</string>
                 </property>
@@ -2032,7 +2165,7 @@
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
-                  <width>10</width>
+                  <width>0</width>
                   <height>10</height>
                  </size>
                 </property>
@@ -2059,6 +2192,9 @@
                 <width>120</width>
                 <height>16777215</height>
                </size>
+              </property>
+              <property name="frameShadow">
+               <enum>QFrame::Shadow::Raised</enum>
               </property>
              </widget>
             </item>

@@ -4,10 +4,13 @@ import json
 import sqlite3
 import time
 import requests
+import plotly.express as px
 
 from PyQt6.QtSql import *
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtWebEngineWidgets import QWebEngineView
 from output import Ui_MainWindow
 
 #pyuic6 -o .\GE_helper\output.py .\GE_helper\newUI.ui
@@ -26,8 +29,6 @@ filteredItemListValues = "(id INTEGER PRIMARY KEY, itemName, buyLimit, lowPrice,
 alertConfigFile = "cfg/alertConfig.json"
 filterConfigFile = "cfg/filterConfig.json"
 
-
-
 ## default item filter valuues
 def_minBuyLimitValue = 2000000
 def_minHourlyThroughput = 5000000
@@ -36,6 +37,7 @@ def_maxPrice = 10000000
 
 def_priceChangePercent = 100
 def_volChangePercent = 100
+
 
 def textToInt(string):
     try:
@@ -104,10 +106,20 @@ class MainWindow(QMainWindow):
         self.signals.buildDBComplete.connect(self.startPriceLoop)
         self.signals.priceHistoryComplete.connect(self.priceHistoryComplete)
         self.signals.killPriceLoop.connect(self.loopWorker.kill)
-        self.ui.graph_button.toggled['bool'].connect(self.onGraphButtonToggle)
-        self.ui.config_button.toggled['bool'].connect(self.onConfigButtonToggle)
-        self.updateConfigBoxes()
 
+        #graph page setup
+        lay = QVBoxLayout(self.ui.mainGraph)
+        self.mainGraph = QWebEngineView()
+        lay.addWidget(self.mainGraph)
+        lay = QVBoxLayout(self.ui.volGraph)
+        self.volGraph = QWebEngineView()
+        lay.addWidget(self.volGraph)
+
+        self.ui.graph_button.clicked.connect(self.onGraphButtonToggle)
+        self.ui.config_button.clicked.connect(self.onConfigButtonToggle)
+
+        self.updateConfigBoxes()
+        self.ui.mainPageView.setCurrentIndex(0)
         #confirm that database exists and build has been finished
         if os.path.isfile("database.db"):
             try:
@@ -115,9 +127,11 @@ class MainWindow(QMainWindow):
                 cursor = database.cursor()
                 cursor.execute("SELECT id FROM filteredDB WHERE tracked=FALSE")
                 result = cursor.fetchall()
-                if result == None:
+                database.close()
+                if len(result) == 0:
                     self.startPriceLoop()
                     self.activateMainWindow()
+                    self.ui.mainPageView.setCurrentIndex(1)
                 else:
                     worker = Worker(self.buildPriceHistoryDB)
                     self.threadpool.start(worker)
@@ -126,18 +140,51 @@ class MainWindow(QMainWindow):
         else:
             print("no DB exists")
 
-        
     def startPriceLoop(self):
-        self.threadpool.start(self.loopWorker)
-
+        #self.threadpool.start(self.loopWorker)
+        print("test")
     def activateMainWindow(self):
         self.ui.graph_button.setEnabled(True)
         self.ui.search_bar.setEnabled(True)
+
+    def updateGraphPage(self, itemID):
+        database = sqlite3.connect('database.db')
+        cursor = database.cursor()
+        command = f"SELECT id, itemName, buyLimit, lowPrice, highPrice, value, highAlch, lowVolume, highVolume FROM filteredDB WHERE id={itemID}"
+        result = cursor.execute(command).fetchall()
+        database.close()
+        values = {}
+        for i in range(len(result[0])):
+            values[i] = str(result[0][i])
+        self.ui.id_label.setText(values[0])
+        self.ui.name_label.setText(values[1])
+        self.ui.limit_label.setText(values[2])
+        self.ui.avgSell_label.setText(values[3])
+        self.ui.avgBuy_label.setText(values[4])
+        self.ui.highAlch_label.setText(values[6])
+        self.ui.sellVol_label.setText(values[7])
+        self.ui.buyVol_label.setText(values[8])
+        # [mainFig, volFig] = self.plotPrep(itemID)
+
+        # html_content = mainFig.to_html(include_plotlyjs='cdn')
+        # self.mainGraph.setHtml(html_content)
+        # html_content = volFig.to_html(include_plotlyjs='cdn')
+        # self.volGraph.setHtml(html_content)
 
     def updateBar(self, progress):
         self.ui.progressBar.setValue(progress)
     def updateLoadingText(self, text):
         self.ui.loading_label.setText(text)
+    def onGraphButtonToggle(self):
+        self.ui.mainPageView.setCurrentIndex(1)
+    def onConfigButtonToggle(self):
+        worker = Worker(self.updateConfigBoxes)
+        self.threadpool.start(worker)
+        self.ui.mainPageView.setCurrentIndex(0)
+
+    def rebuildDBPressed(self):
+        worker = Worker(self.buildDB)
+        self.threadpool.start(worker)
 
     def updateConfigBoxes(self):
         try:
@@ -176,11 +223,7 @@ class MainWindow(QMainWindow):
         self.ui.mlpc_line.setPlaceholderText(str(minLowPriceChange))
         self.ui.mhpc_line.setPlaceholderText(str(minHighPriceChange))
         self.ui.mlvc_line.setPlaceholderText(str(minLowVolChange))
-        self.ui.mhvc_line.setPlaceholderText(str(minHighVolChange))
-
-    def rebuildDBPressed(self):
-        worker = Worker(self.buildDB)
-        self.threadpool.start(worker)
+        self.ui.mhvc_line.setPlaceholderText(str(minHighVolChange))  
 
     def buildPriceHistoryDB(self):
         self.ui.splash_stacked.setCurrentIndex(1)
@@ -231,10 +274,11 @@ class MainWindow(QMainWindow):
                     highVolChange = (highPriceVolume / oneDayAvg.get("avgHighVol"))*100 - 100
                 except:
                     highVolChange = 0
-                cursor.execute("INSERT INTO filteredDB (lowPrice, highPrice, lowVolume, highVolume, lowPriceChange, highPriceChange, lowVolumeChange, highVolumeChange, timestamp, tracked) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", 
-                    (avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume, lowPriceChange, highPriceChange, lowVolChange, highVolChange, timestamp, True))
+                cursor.execute("UPDATE filteredDB set lowPrice=?, highPrice=?, lowVolume=?, highVolume=?, lowPriceChange=?, highPriceChange=?, lowVolumeChange=?, highVolumeChange=?, timestamp=?, tracked=? WHERE id=?", 
+                    (avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume, lowPriceChange, highPriceChange, lowVolChange, highVolChange, timestamp, True, id[0]))
                 database.commit()
                 time.sleep(1)
+        database.close()
         self.signals.priceHistoryComplete.emit()
 
     def itemPriceLoop(self):
@@ -252,7 +296,7 @@ class MainWindow(QMainWindow):
                 lastUpdate = response.get('timestamp')
                 print(response.get('timestamp'))
                 print(time.time())
-                trackedIDs = cursor.execute('select id from filteredDB WHERE tracked=TRUE').fetchall()
+                trackedIDs = cursor.execute('SELECT id from filteredDB WHERE tracked=TRUE').fetchall()
                 for id in trackedIDs:
                     id_str = ''.join(str(value) for value in id)
                     command = "SELECT name FROM priceHistory5m.sqlite_master WHERE type='table' AND name='itemID" + id_str + "';"
@@ -302,7 +346,7 @@ class MainWindow(QMainWindow):
                 database.commit()
                 database.close()
                 time.sleep(60)
-    
+
     def buildDB(self):
         #set page to splash screen
         self.signals.killPriceLoop.emit()
@@ -400,14 +444,10 @@ class MainWindow(QMainWindow):
         self.signals.buildDBComplete.emit()
         self.buildPriceHistoryDB()
 
-    def onGraphButtonToggle(self):
-        self.ui.mainPageView.setCurrentIndex(1)
-    def onConfigButtonToggle(self):
-        self.ui.mainPageView.setCurrentIndex(0)
-
     def priceHistoryComplete(self):
         self.signals.progBarChange.emit(100)
         self.signals.loadTextChange.emit("you shouldn't be here")
+        self.updateConfigBoxes()
         self.ui.splash_stacked.setCurrentIndex(0)
         self.activateMainWindow()
 
@@ -447,7 +487,23 @@ class MainWindow(QMainWindow):
                 avgHighVol = avgHighVol + vol[0]
             avgHighVol = avgHighVol / len(highVolumes)
         return {"avgLowPrice": avgLowPrice, "avgHighPrice": avgHighPrice, "avgLowVol": avgLowVol, "avgHighVol": avgHighVol}
-
+    
+    def plotPrep(self, itemID):
+        database = sqlite3.connect('itemData.db')
+        cursor = database.cursor()
+        cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
+        command = "SELECT name FROM priceHistory5m.sqlite_master WHERE type='table' AND name='itemID" + itemID + "';"
+        query = cursor.execute(command)
+        if not query.fetchone() == None:
+            tableName = "priceHistory5m.itemID" + itemID
+            command = "SELECT timestamp, avgHighPrice FROM " + tableName + " WHERE avgHighPrice IS NOT NULL"
+            query = cursor.execute(command)
+            dat = query.fetchall()
+            fig = px.line(dat, x=0, y=1)
+            return fig
+        else:
+            print(f"no table for {itemID}")
+        database.close()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

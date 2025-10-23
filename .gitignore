@@ -1,0 +1,4 @@
+database.db
+priceHistory5m.db
+cfg/filterConfig.json
+venv//Lib/site-packages/
