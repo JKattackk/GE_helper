@@ -14,7 +14,8 @@ from PyQt6.QtCore import *
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from output import Ui_MainWindow
-
+from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QFontDatabase
 #pyuic6 -o .\GE_helper\output.py .\GE_helper\newUI.ui
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -27,7 +28,6 @@ headers = {
 }
 
 filteredItemListValues = "(id INTEGER PRIMARY KEY, itemName, buyLimit, lowPrice, highPrice, value, highAlch, lowVolume, highVolume, lowPriceChange, highPriceChange, lowVolumeChange, highVolumeChange, timestamp, tracked)"
-
 alertConfigFile = "cfg/alertConfig.json"
 filterConfigFile = "cfg/filterConfig.json"
 
@@ -39,7 +39,7 @@ def_maxPrice = 10000000
 
 def_priceChangePercent = 100
 def_volChangePercent = 100
-
+alertColumnWidths = [256, 64, 64, 50, 64, 64 , 128]
 
 def textToInt(string):
     try:
@@ -58,11 +58,21 @@ def textToInt(string):
             case default:
                 raise ValueError
 
+class alert:
+    def __init__(self, id, name, lowPriceChange, highPriceChange, lowVolChange, highVolChange, timestamp):
+        self.id = id
+        self.name = name
+        self.lowPriceChange = lowPriceChange
+        self.highPriceChange = highPriceChange
+        self.lowVolChange = lowVolChange
+        self.highVolChange = highVolChange
+        self.timestamp = timestamp
+    
 class signals(QObject):
     #indicates new price update. Includes unix timestamp of last update
     newUpdate = pyqtSignal(int)
     #indicates new alerts.  
-    newAlerts = pyqtSignal()
+    newAlerts = pyqtSignal(list)
     newItem = pyqtSignal(str)
     graphReady = pyqtSignal(object)
     #GUI updating requests
@@ -101,6 +111,12 @@ class MainWindow(QMainWindow):
         self.signals = signals()
 
         self.loopWorker = Worker(self.itemPriceLoop)
+        self.ui.historyList.setVisible(False)
+
+        #alert setup
+        for i in range(len(alertColumnWidths)):
+            self.ui.alert_list.setColumnWidth(i, alertColumnWidths[i])
+        
         #config page setup
         self.ui.rebuild_db_button.clicked.connect(self.rebuildDBPressed)
         self.signals.progBarChange.connect(self.updateBar)
@@ -110,10 +126,20 @@ class MainWindow(QMainWindow):
         self.signals.killPriceLoop.connect(self.loopWorker.kill)
         self.signals.newItem.connect(self.newItem)
         self.signals.graphReady.connect(self.updatePlot)
+        self.ui.history_button.toggled['bool'].connect(self.onHistoryButtonToggle)
+        self.signals.newAlerts.connect(self.updateAlerts)
 
         #graph page setup
         self.ui.graph_button.clicked.connect(self.onGraphButtonToggle)
         self.ui.config_button.clicked.connect(self.onConfigButtonToggle)
+        # make the QWebEngineView transparent so the app theme shows through
+        # (also set a transparent page background if available)
+        try:
+            self.ui.mainGraph.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+            self.ui.mainGraph.setStyleSheet("background: transparent;")
+            self.ui.mainGraph.page().setBackgroundColor(QColor(0,0,0,0))
+        except Exception as e:
+            print("Warning: couldn't set webengine transparency:", e)
 
         self.updateConfigBoxes()
         self.ui.mainPageView.setCurrentIndex(0)
@@ -150,7 +176,10 @@ class MainWindow(QMainWindow):
         self.ui.graph_button.setEnabled(True)
         self.ui.search_bar.setEnabled(True)
         self.updateGraphPage("2")
-
+        alerts = []
+        alerts.append(alert(2, "cobonal", "-50", "-20", "-40", "2000", "123992"))
+        self.signals.newAlerts.emit(alerts)
+    
     def updateGraphPage(self, itemID):
         print(f"updating graph with {itemID}")
         try:
@@ -185,6 +214,22 @@ class MainWindow(QMainWindow):
         worker = Worker(self.updateConfigBoxes)
         self.threadpool.start(worker)
         self.ui.mainPageView.setCurrentIndex(0)
+    def onHistoryButtonToggle(self, state):
+        if state:
+            self.ui.historyList.setVisible(True)
+        else:
+            self.ui.historyList.setVisible(False)
+
+    def updateAlerts(self, alerts):
+        for alert in alerts:
+            self.ui.alert_list.insertRow(0)
+            self.ui.alert_list.setItem(0, 0, QTableWidgetItem(f"{alert.id}: {alert.name} "))
+            self.ui.alert_list.setItem(0, 1, QTableWidgetItem(alert.highPriceChange))
+            self.ui.alert_list.setItem(0, 2, QTableWidgetItem(alert.lowPriceChange))
+            self.ui.alert_list.setItem(0, 4, QTableWidgetItem(alert.highVolChange))
+            self.ui.alert_list.setItem(0, 5, QTableWidgetItem(alert.lowVolChange))
+            self.ui.alert_list.setItem(0, 7, QTableWidgetItem(alert.timestamp))
+
 
     def rebuildDBPressed(self):
         worker = Worker(self.buildDB)
@@ -344,7 +389,7 @@ class MainWindow(QMainWindow):
                                 if (lowPriceChange < def_priceChangePercent or highPriceChange < def_priceChangePercent) and (lowVolChange > def_volChangePercent or highVolChange > def_volChangePercent):
                                     command = "SELECT itemName FROM filteredDB WHERE id = ?"
                                     name = cursor.execute(command, id).fetchone()[0]
-                                    alerts.append({"id": id[0], "name": name, "lowPriceChange": lowPriceChange, "highPriceChange": highPriceChange, "lowVolChange": lowVolChange, "highVolChange": highVolChange})
+                                    alerts.append({"id": id[0], "name": name, "lowPriceChange": lowPriceChange, "highPriceChange": highPriceChange, "lowVolChange": lowVolChange, "highVolChange": highVolChange, "timestamp": lastUpdate})
                                     print("?: low price ?%, high price ?%, low volume ?%, high volume ?%", (name, lowPriceChange, highPriceChange, lowVolChange, highVolChange))
                 self.updateAlerts(alerts)
                 database.commit()
@@ -503,8 +548,7 @@ class MainWindow(QMainWindow):
             command = "SELECT timestamp, avgHighPrice, avgLowPrice FROM " + tableName
             query = cursor.execute(command)
             dat = query.fetchall()
-            fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
-                        vertical_spacing=0.05)
+            fig = make_subplots(rows=2, cols=1, row_heights=[0.8, 0.2], shared_xaxes=True, vertical_spacing=0.05)
             time = [point[0] for point in dat]
             high = [point[1] for point in dat]
             low = [point[2] for point in dat]
@@ -519,9 +563,11 @@ class MainWindow(QMainWindow):
             database.close()
             high = [point[0] for point in dat]
             low = [point[1] for point in dat]
-            fig.add_trace(go.Histogram(histfunc="sum", x=time, y=high, marker_color="orange", xbins=dict(size=500)), row=2, col=1)
-            fig.add_trace(go.Histogram(histfunc="sum", x=time, y=low, marker_color="dodgerblue", xbins=dict(size=500)), row=2, col=1)
-            fig.update_layout(bargap=0.1, bargroupgap=0.05, showlegend = False)
+            fig.add_trace(go.Histogram(histfunc="sum", x=time, y=high, marker_color="orange", xbins=dict(size=1000)), row=2, col=1)
+            fig.add_trace(go.Histogram(histfunc="sum", x=time, y=low, marker_color="dodgerblue", xbins=dict(size=1000)), row=2, col=1)
+
+            fig.update_layout(bargap=0.1, bargroupgap=0.05, showlegend = False, margin=dict(l=8, r=8, t=8, b=8),
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', autosize=True)
 
             self.signals.graphReady.emit(fig)
         else:
@@ -537,6 +583,4 @@ if __name__ == "__main__":
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
-
-                
 
