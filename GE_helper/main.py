@@ -4,7 +4,9 @@ import json
 import sqlite3
 import time
 import requests
-import plotly.express as px
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+import pandas as pd
 
 from PyQt6.QtSql import *
 from PyQt6.QtWidgets import *
@@ -61,13 +63,13 @@ class signals(QObject):
     newUpdate = pyqtSignal(int)
     #indicates new alerts.  
     newAlerts = pyqtSignal()
-
+    newItem = pyqtSignal(str)
+    graphReady = pyqtSignal(object)
     #GUI updating requests
     progBarChange = pyqtSignal(int)
     loadTextChange = pyqtSignal(str)
     buildDBComplete = pyqtSignal()
     priceHistoryComplete = pyqtSignal()
-
     killPriceLoop = pyqtSignal()
 
 class Worker(QRunnable):
@@ -106,15 +108,10 @@ class MainWindow(QMainWindow):
         self.signals.buildDBComplete.connect(self.startPriceLoop)
         self.signals.priceHistoryComplete.connect(self.priceHistoryComplete)
         self.signals.killPriceLoop.connect(self.loopWorker.kill)
+        self.signals.newItem.connect(self.newItem)
+        self.signals.graphReady.connect(self.updatePlot)
 
         #graph page setup
-        lay = QVBoxLayout(self.ui.mainGraph)
-        self.mainGraph = QWebEngineView()
-        lay.addWidget(self.mainGraph)
-        lay = QVBoxLayout(self.ui.volGraph)
-        self.volGraph = QWebEngineView()
-        lay.addWidget(self.volGraph)
-
         self.ui.graph_button.clicked.connect(self.onGraphButtonToggle)
         self.ui.config_button.clicked.connect(self.onConfigButtonToggle)
 
@@ -140,36 +137,43 @@ class MainWindow(QMainWindow):
         else:
             print("no DB exists")
 
+    def newItem(self, itemID):
+        self.updateGraphPage(itemID)
+    def updatePlot(self, fig):
+        html = fig.to_html(include_plotlyjs='cdn')
+        self.ui.mainGraph.setHtml(html, QUrl())
+
     def startPriceLoop(self):
         #self.threadpool.start(self.loopWorker)
         print("test")
     def activateMainWindow(self):
         self.ui.graph_button.setEnabled(True)
         self.ui.search_bar.setEnabled(True)
+        self.updateGraphPage("2")
 
     def updateGraphPage(self, itemID):
-        database = sqlite3.connect('database.db')
-        cursor = database.cursor()
-        command = f"SELECT id, itemName, buyLimit, lowPrice, highPrice, value, highAlch, lowVolume, highVolume FROM filteredDB WHERE id={itemID}"
-        result = cursor.execute(command).fetchall()
-        database.close()
-        values = {}
-        for i in range(len(result[0])):
-            values[i] = str(result[0][i])
-        self.ui.id_label.setText(values[0])
-        self.ui.name_label.setText(values[1])
-        self.ui.limit_label.setText(values[2])
-        self.ui.avgSell_label.setText(values[3])
-        self.ui.avgBuy_label.setText(values[4])
-        self.ui.highAlch_label.setText(values[6])
-        self.ui.sellVol_label.setText(values[7])
-        self.ui.buyVol_label.setText(values[8])
-        # [mainFig, volFig] = self.plotPrep(itemID)
-
-        # html_content = mainFig.to_html(include_plotlyjs='cdn')
-        # self.mainGraph.setHtml(html_content)
-        # html_content = volFig.to_html(include_plotlyjs='cdn')
-        # self.volGraph.setHtml(html_content)
+        print(f"updating graph with {itemID}")
+        try:
+            database = sqlite3.connect('database.db')
+            cursor = database.cursor()
+            command = f"SELECT id, itemName, buyLimit, lowPrice, highPrice, value, highAlch, lowVolume, highVolume FROM filteredDB WHERE id={itemID}"
+            result = cursor.execute(command).fetchall()
+            database.close()
+            values = {}
+            for i in range(len(result[0])):
+                values[i] = str(result[0][i])
+            self.ui.id_label.setText(values[0])
+            self.ui.name_label.setText(values[1])
+            self.ui.limit_label.setText(values[2])
+            self.ui.avgSell_label.setText(values[3])
+            self.ui.avgBuy_label.setText(values[4])
+            self.ui.highAlch_label.setText(values[6])
+            self.ui.sellVol_label.setText(values[7])
+            self.ui.buyVol_label.setText(values[8])
+            worker = Worker(self.plotPrep, itemID)
+            self.threadpool.start(worker)
+        except Exception as e:
+            print(e)
 
     def updateBar(self, progress):
         self.ui.progressBar.setValue(progress)
@@ -254,7 +258,7 @@ class MainWindow(QMainWindow):
                     avgHighPrice = item.get('avgHighPrice')
                     avgLowPrice = item.get('avgLowPrice')
                     highPriceVolume = item.get('highPriceVolume')
-                    lowPriceVolume = item.get('highPriceVolume')
+                    lowPriceVolume = item.get('lowPriceVolume')
                     cursor.execute("INSERT INTO " + tableName + "(timeStamp, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume) VALUES(?, ?, ?, ?, ?);", (timestamp, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume))
                 
                 oneDayAvg = self.getOneDayAvg(database, tableName, timestamp)
@@ -496,14 +500,33 @@ class MainWindow(QMainWindow):
         query = cursor.execute(command)
         if not query.fetchone() == None:
             tableName = "priceHistory5m.itemID" + itemID
-            command = "SELECT timestamp, avgHighPrice FROM " + tableName + " WHERE avgHighPrice IS NOT NULL"
+            command = "SELECT timestamp, avgHighPrice, avgLowPrice FROM " + tableName
             query = cursor.execute(command)
             dat = query.fetchall()
-            fig = px.line(dat, x=0, y=1)
-            return fig
+            fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
+                        vertical_spacing=0.05)
+            time = [point[0] for point in dat]
+            high = [point[1] for point in dat]
+            low = [point[2] for point in dat]
+
+            fig.add_trace(go.Scatter(x=time, y=high, mode='lines+markers',marker_color="orange"), row=1, col=1)
+            fig.add_trace(go.Scatter(x=time, y=low, mode='lines+markers',marker_color="dodgerblue"), row=1, col=1)
+            
+
+            command = "SELECT lowPriceVolume, highPriceVolume FROM " + tableName
+            query = cursor.execute(command)
+            dat = query.fetchall()
+            database.close()
+            high = [point[0] for point in dat]
+            low = [point[1] for point in dat]
+            fig.add_trace(go.Histogram(histfunc="sum", x=time, y=high, marker_color="orange", xbins=dict(size=500)), row=2, col=1)
+            fig.add_trace(go.Histogram(histfunc="sum", x=time, y=low, marker_color="dodgerblue", xbins=dict(size=500)), row=2, col=1)
+            fig.update_layout(bargap=0.1, bargroupgap=0.05, showlegend = False)
+
+            self.signals.graphReady.emit(fig)
         else:
             print(f"no table for {itemID}")
-        database.close()
+            database.close()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
