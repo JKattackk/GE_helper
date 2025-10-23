@@ -1,0 +1,83 @@
+/* * Base colors
+@dark = #000000
+@light = #ffffff
+
+Dark theme primary colors 
+@primA0 = #a60898
+@primA10 = #b238a3
+@primA20 = #bd55af
+@primA30 = #c86fba
+@primA40 = #d388c6
+@primA50 = #dc9fd1
+
+/** Dark theme surface colors 
+@sA0 = #121212
+@sA10 = #282828
+@sA20 = #3f3f3f
+@sA30 = #575757
+@sA40 = #717171
+@sA50 = #8b8b8b
+
+/** Dark theme tonal surface colors 
+@tsA0 = #581d51
+@tsA10 = #6a3563
+@tsA20 = #7d4d75
+@tsA30 = #8f6587
+@tsA40 = #a17d9a
+@tsA50 = #b496ae */
+
+/*= Style for changePageWidget START
+  ==================================================== */
+	#changePageWidget {
+		background-color: #353741;
+	}
+/*= END
+  ==================================================== */
+
+  /*= Style for mainDisplay START
+  ==================================================== */
+	#mainDisplay {
+		background-color: #20222d;
+	}
+/*= END
+  ==================================================== */
+
+    /*= Style for alertBox START
+  ==================================================== */
+	#alertBoxContents {
+		background-color: #4b4c56;
+	}
+/*= END
+  ==================================================== */
+
+  /*= Style for bottomBar START
+  ==================================================== */
+	#bottomBar {
+		background-color: #20222d;
+	}
+/*= END
+  ==================================================== */
+
+    /*= Style for sideBar START
+  ==================================================== */
+	#sideBar {
+		background-color: #20222d;
+	}
+/*= END
+  ==================================================== */
+
+    /*= Style for itemTable START
+  ==================================================== */
+	#itemTable {
+		background-color: #93949b;
+	}
+/*= END
+  ==================================================== */
+
+  /*= Style for ControlPanelCenterArea START
+  ==================================================== */
+	#changePageWidget {
+		background-color: #4b4c56;
+	}
+/*= END
+  ==================================================== */
