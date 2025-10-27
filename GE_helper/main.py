@@ -155,6 +155,7 @@ class MainWindow(QMainWindow):
                     self.startPriceLoop()
                     self.activateMainWindow()
                     self.ui.mainPageView.setCurrentIndex(1)
+                    self.ui.graph_button.setChecked(True)
                 else:
                     worker = Worker(self.buildPriceHistoryDB)
                     self.threadpool.start(worker)
@@ -229,7 +230,6 @@ class MainWindow(QMainWindow):
             self.ui.alert_list.setItem(0, 4, QTableWidgetItem(alert.highVolChange))
             self.ui.alert_list.setItem(0, 5, QTableWidgetItem(alert.lowVolChange))
             self.ui.alert_list.setItem(0, 7, QTableWidgetItem(alert.timestamp))
-
 
     def rebuildDBPressed(self):
         worker = Worker(self.buildDB)
