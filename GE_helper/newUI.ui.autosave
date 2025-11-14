@@ -542,7 +542,7 @@
                <string notr="true">background-color: rgba(255, 255, 255, 0);</string>
               </property>
               <property name="currentIndex">
-               <number>2</number>
+               <number>1</number>
               </property>
               <widget class="QWidget" name="config_page">
                <layout class="QVBoxLayout" name="verticalLayout_8">
@@ -1318,6 +1318,9 @@
                         <width>128</width>
                         <height>0</height>
                        </size>
+                      </property>
+                      <property name="styleSheet">
+                       <string notr="true">color: rgb(255, 255, 255);</string>
                       </property>
                       <property name="text">
                        <string>Unknown</string>

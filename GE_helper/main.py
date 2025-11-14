@@ -130,29 +130,18 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
-            self.signals = signals()
             self.loopWorker = Worker(self.itemPriceLoop)
+
+            self.signals = signals()
+            self.setup_signals()
+
             self.ui.history_list.setVisible(False)
 
             #alert setup
             for i in range(len(alertColumnWidths)):
                 self.ui.alert_list.setColumnWidth(i, alertColumnWidths[i])
             
-            #config page setup
-            self.ui.rebuild_db_button.clicked.connect(self.rebuildDBPressed)
-            self.signals.progBarChange.connect(self.updateBar)
-            self.signals.loadTextChange.connect(self.updateLoadingText)
-            self.signals.buildDBComplete.connect(self.startPriceLoop)
-            self.signals.priceHistoryComplete.connect(self.priceHistoryComplete)
-            self.signals.killPriceLoop.connect(self.loopWorker.kill)
-            self.signals.newItem.connect(self.newItem)
-            self.signals.graphReady.connect(self.updatePlot)
-            self.ui.history_button.toggled['bool'].connect(self.onHistoryButtonToggle)
-            self.signals.newAlerts.connect(self.updateAlerts)
-
             #graph page setup
-            self.ui.graph_button.clicked.connect(self.onGraphButtonToggle)
-            self.ui.config_button.clicked.connect(self.onConfigButtonToggle)
             self.updateConfigBoxes()
             self.ui.main_stack_widget.setCurrentIndex(0)
             #confirm that database exists and build has been finished
@@ -183,6 +172,24 @@ class MainWindow(QMainWindow):
             import traceback
             traceback.print_exc()
             raise
+    
+    def setup_signals(self):
+        #button connections
+        self.ui.rebuild_db_button.clicked.connect(self.rebuildDBPressed)
+        self.ui.history_button.toggled['bool'].connect(self.onHistoryButtonToggle)
+        self.ui.config_button.clicked.connect(self.onConfigButtonToggle)
+        self.ui.graph_button.clicked.connect(self.onGraphButtonToggle)
+
+        #loading screen control
+        self.signals.progBarChange.connect(self.updateBar)
+        self.signals.loadTextChange.connect(self.updateLoadingText)
+
+        self.signals.buildDBComplete.connect(self.startPriceLoop)
+        self.signals.priceHistoryComplete.connect(self.priceHistoryComplete)
+        self.signals.killPriceLoop.connect(self.loopWorker.kill)
+        self.signals.newItem.connect(self.newItem)
+        self.signals.graphReady.connect(self.updatePlot)
+        self.signals.newAlerts.connect(self.updateAlerts)
 
     def newItem(self, itemID):
         print("new item received:", itemID)
@@ -205,7 +212,7 @@ class MainWindow(QMainWindow):
         alerts.append(alert(2, "cobonal", "-50", "-20", "-40", "2000", "123992"))
         self.signals.newAlerts.emit(alerts)
         print("main window setup complete")
-    
+       
     def updateGraphPage(self, itemID):
         print(f"updating graph with {itemID}")
         try:
@@ -243,9 +250,9 @@ class MainWindow(QMainWindow):
         self.ui.main_stack_widget.setCurrentIndex(0)
     def onHistoryButtonToggle(self, state):
         if state:
-            self.ui.historyList.setVisible(True)
+            self.ui.history_list.setVisible(True)
         else:
-            self.ui.historyList.setVisible(False)
+            self.ui.history_list.setVisible(False)
     
     def updateAlerts(self, alerts):
         for alert in alerts:
@@ -639,7 +646,8 @@ if __name__ == "__main__":
         ## load style
         with open("theme.qss") as theme:
             theme_str = theme.read()
-        app.setStyleSheet(theme_str)
+            app.setStyleSheet(theme_str)
+        
 
         if not hasattr(app, "main_window"):
             app.main_window = MainWindow()

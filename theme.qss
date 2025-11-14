@@ -1,86 +1,38 @@
-/* * Base colors
-@dark = #000000
-@light = #ffffff
 
-Dark theme primary colors 
-@primA0 = #a60898
-@primA10 = #b238a3
-@primA20 = #bd55af
-@primA30 = #c86fba
-@primA40 = #d388c6
-@primA50 = #dc9fd1
+#central_widget {
+	background-color: #353741;
+}	
+#alert_area {
+	background-color: #595d61;
+}
 
-/** Dark theme surface colors 
-@sA0 = #121212
-@sA10 = #282828
-@sA20 = #3f3f3f
-@sA30 = #575757
-@sA40 = #717171
-@sA50 = #8b8b8b
+#alert_list {
+	background-color: #1be792;
+}
 
-/** Dark theme tonal surface colors 
-@tsA0 = #581d51
-@tsA10 = #6a3563
-@tsA20 = #7d4d75
-@tsA30 = #8f6587
-@tsA40 = #a17d9a
-@tsA50 = #b496ae */
+#sidebar_widget {
+	background-color: #20222d;
+}
 
+#header_bar {
+	background-color: #20222d;
+}
+#icon_area {
+	background-color: #20222d;
+}
 
+#history_list {
+	background-color: #34373a;
+}
+QPushButton{
+	color: #f5f5f5;
+	background-color: rgb(63, 58, 58);
+	border-radius: 5px;
+	border-color: black;
+	font: bold 14px;
+}
 
-
-/*= Style for mainGraph START
-  ==================================================== */
-	#mainGraph {
-	}
-/*= END
-  ==================================================== */
-
-/*= Style for central_widget START
-  ==================================================== */
-	#central_widget {
-		background-color: #8c90bb;
-	}
-/*= END
-  ==================================================== */
-
-
-    /*= Style for alertBox START
-  ==================================================== */
-	#alert_list {
-		background-color: #4b4c56;
-	}
-/*= END
-  ==================================================== */
-
-  /*= Style for bottomBar START
-  ==================================================== */
-	#alertArea {
-		background-color: #20222d;
-	}
-/*= END
-  ==================================================== */
-
-    /*= Style for sideBar START
-  ==================================================== */
-	#sideBar {
-		background-color: #20222d;
-	}
-/*= END
-  ==================================================== */
-
-    /*= Style for itemTable START
-  ==================================================== */
-	#headerBar_2 {
-		background-color: #93949b;
-	}
-/*= END
-  ==================================================== */
-
-  /*= Style for ControlPanelCenterArea START
-  ==================================================== */
-	#historyList {
-		background-color: #4b4c56;
-	}
-/*= END
-  ==================================================== */
+QLabel{
+	color: #f5f5f5;
+	font: 14px;
+}
