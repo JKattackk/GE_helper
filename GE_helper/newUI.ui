@@ -21,7 +21,7 @@
   </property>
   <widget class="QWidget" name="central_widget">
    <property name="styleSheet">
-    <string notr="true">background-color: {main_bg_color};</string>
+    <string notr="true">background-color: rgb(76, 100, 100);</string>
    </property>
    <layout class="QVBoxLayout" name="verticalLayout_9">
     <property name="spacing">
@@ -143,7 +143,7 @@
                 </size>
                </property>
                <property name="focusPolicy">
-                <enum>Qt::FocusPolicy::StrongFocus</enum>
+                <enum>Qt::FocusPolicy::ClickFocus</enum>
                </property>
                <property name="contextMenuPolicy">
                 <enum>Qt::ContextMenuPolicy::DefaultContextMenu</enum>
@@ -1149,13 +1149,16 @@
                   <item>
                    <widget class="QWebEngineView" name="mainGraph" native="true">
                     <property name="enabled">
-                     <bool>false</bool>
+                     <bool>true</bool>
                     </property>
                     <property name="sizePolicy">
                      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
                       <horstretch>0</horstretch>
                       <verstretch>0</verstretch>
                      </sizepolicy>
+                    </property>
+                    <property name="styleSheet">
+                     <string notr="true">background-color: rgba(0, 0, 0, 0);</string>
                     </property>
                    </widget>
                   </item>
@@ -2197,7 +2200,7 @@
                </size>
               </property>
               <property name="autoFillBackground">
-               <bool>true</bool>
+               <bool>false</bool>
               </property>
               <property name="text">
                <string>TextLabel</string>

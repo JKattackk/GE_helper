@@ -29,10 +29,17 @@ Dark theme primary colors
 
 
 
+/*= Style for mainGraph START
+  ==================================================== */
+	#mainGraph {
+	}
+/*= END
+  ==================================================== */
+
 /*= Style for central_widget START
   ==================================================== */
 	#central_widget {
-		background-color: #4b4c56;
+		background-color: #8c90bb;
 	}
 /*= END
   ==================================================== */

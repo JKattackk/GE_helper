@@ -123,18 +123,12 @@ class MainWindow(QMainWindow):
             #graph setup
             try:
                 #prevents window flicker during startup
+                self.ui.mainGraph.page().setBackgroundColor(QColor(0,0,0,0))
                 self.ui.mainGraph.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
                 # calling winId() forces creation of the native window handle
                 _ = self.ui.mainGraph.winId()
-                try:
-                    self.ui.mainGraph.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-                    self.ui.mainGraph.setStyleSheet("background: transparent;")
-                    self.ui.mainGraph.page().setBackgroundColor(QColor(0,0,0,0))
-                except Exception as e:
-                    print("Warning: couldn't set webengine transparency:", e)
             except Exception:
                 pass
-
 
             self.signals = signals()
             self.loopWorker = Worker(self.itemPriceLoop)
@@ -172,7 +166,7 @@ class MainWindow(QMainWindow):
                     if len(result) == 0:
                         self.startPriceLoop()
                         self.activateMainWindow()
-                        #self.updateGraphPage("2")
+                        self.updateGraphPage("2")
                         self.ui.main_stack_widget.setCurrentIndex(1)
                         self.ui.graph_button.setChecked(True)
                     else:
