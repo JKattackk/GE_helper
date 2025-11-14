@@ -26,25 +26,21 @@ Dark theme primary colors
 @tsA40 = #a17d9a
 @tsA50 = #b496ae */
 
-/*= Style for changePageWidget START
+
+
+
+/*= Style for central_widget START
   ==================================================== */
-	#changePageWidget {
-		background-color: #353741;
+	#central_widget {
+		background-color: #4b4c56;
 	}
 /*= END
   ==================================================== */
 
-  /*= Style for mainDisplay START
-  ==================================================== */
-	#mainDisplay {
-		background-color: #20222d;
-	}
-/*= END
-  ==================================================== */
 
     /*= Style for alertBox START
   ==================================================== */
-	#alertBoxContents {
+	#alert_list {
 		background-color: #4b4c56;
 	}
 /*= END
@@ -52,7 +48,7 @@ Dark theme primary colors
 
   /*= Style for bottomBar START
   ==================================================== */
-	#bottomBar {
+	#alertArea {
 		background-color: #20222d;
 	}
 /*= END
@@ -68,7 +64,7 @@ Dark theme primary colors
 
     /*= Style for itemTable START
   ==================================================== */
-	#itemTable {
+	#headerBar_2 {
 		background-color: #93949b;
 	}
 /*= END
@@ -76,7 +72,7 @@ Dark theme primary colors
 
   /*= Style for ControlPanelCenterArea START
   ==================================================== */
-	#changePageWidget {
+	#historyList {
 		background-color: #4b4c56;
 	}
 /*= END

@@ -7,7 +7,7 @@ import requests
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import pandas as pd
-
+import traceback
 from PyQt6.QtSql import *
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
@@ -39,7 +39,8 @@ def_maxPrice = 10000000
 
 def_priceChangePercent = 100
 def_volChangePercent = 100
-alertColumnWidths = [256, 64, 64, 50, 64, 64 , 128]
+alertColumnWidths = [256, 64, 64, 50, 64, 64, 128]
+
 
 def textToInt(string):
     try:
@@ -94,92 +95,122 @@ class Worker(QRunnable):
     @pyqtSlot()
     def run(self):
         """Initialise the runner function with passed args, kwargs."""
-        self.is_killed = False
-        self.fn(*self.args, **self.kwargs)
+        try:
+            print(f"Worker starting: {self.fn.__name__}")
+            self.is_killed = False
+            self.fn(*self.args, **self.kwargs)
+            print(f"Worker completed: {self.fn.__name__}")
+        except Exception as e:
+            print(f"Error in worker thread: {e}")
+            traceback.print_exc()
 
     def kill(self):
         self.is_killed = True
 
 class MainWindow(QMainWindow):
     def __init__(self):
-        self.threadpool = QThreadPool()
-        thread_count = self.threadpool.maxThreadCount()
-        print(f"Multithreading with maximum {thread_count} threads")
-        super(MainWindow, self).__init__()
-        self.ui = Ui_MainWindow()
-        self.ui.setupUi(self)
-        self.signals = signals()
-
-        self.loopWorker = Worker(self.itemPriceLoop)
-        self.ui.historyList.setVisible(False)
-
-        #alert setup
-        for i in range(len(alertColumnWidths)):
-            self.ui.alert_list.setColumnWidth(i, alertColumnWidths[i])
-        
-        #config page setup
-        self.ui.rebuild_db_button.clicked.connect(self.rebuildDBPressed)
-        self.signals.progBarChange.connect(self.updateBar)
-        self.signals.loadTextChange.connect(self.updateLoadingText)
-        self.signals.buildDBComplete.connect(self.startPriceLoop)
-        self.signals.priceHistoryComplete.connect(self.priceHistoryComplete)
-        self.signals.killPriceLoop.connect(self.loopWorker.kill)
-        self.signals.newItem.connect(self.newItem)
-        self.signals.graphReady.connect(self.updatePlot)
-        self.ui.history_button.toggled['bool'].connect(self.onHistoryButtonToggle)
-        self.signals.newAlerts.connect(self.updateAlerts)
-
-        #graph page setup
-        self.ui.graph_button.clicked.connect(self.onGraphButtonToggle)
-        self.ui.config_button.clicked.connect(self.onConfigButtonToggle)
-        # make the QWebEngineView transparent so the app theme shows through
-        # (also set a transparent page background if available)
+        print("starting __init__...")
         try:
-            self.ui.mainGraph.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-            self.ui.mainGraph.setStyleSheet("background: transparent;")
-            self.ui.mainGraph.page().setBackgroundColor(QColor(0,0,0,0))
-        except Exception as e:
-            print("Warning: couldn't set webengine transparency:", e)
+            print("Constructing MainWindow instance", id(self))
+            self.threadpool = QThreadPool()
+            thread_count = self.threadpool.maxThreadCount()
+            print(f"Multithreading with maximum {thread_count} threads")
 
-        self.updateConfigBoxes()
-        self.ui.mainPageView.setCurrentIndex(0)
-        #confirm that database exists and build has been finished
-        if os.path.isfile("database.db"):
+            super(MainWindow, self).__init__()
+            self.ui = Ui_MainWindow()
+            self.ui.setupUi(self)
+
+            #graph setup
             try:
-                database = sqlite3.connect('database.db')
-                cursor = database.cursor()
-                cursor.execute("SELECT id FROM filteredDB WHERE tracked=FALSE")
-                result = cursor.fetchall()
-                database.close()
-                if len(result) == 0:
-                    self.startPriceLoop()
-                    self.activateMainWindow()
-                    self.ui.mainPageView.setCurrentIndex(1)
-                    self.ui.graph_button.setChecked(True)
+                #prevents window flicker during startup
+                self.ui.mainGraph.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
+                # calling winId() forces creation of the native window handle
+                _ = self.ui.mainGraph.winId()
+                try:
+                    self.ui.mainGraph.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+                    self.ui.mainGraph.setStyleSheet("background: transparent;")
+                    self.ui.mainGraph.page().setBackgroundColor(QColor(0,0,0,0))
+                except Exception as e:
+                    print("Warning: couldn't set webengine transparency:", e)
+            except Exception:
+                pass
+
+
+            self.signals = signals()
+            self.loopWorker = Worker(self.itemPriceLoop)
+            self.ui.history_list.setVisible(False)
+
+            #alert setup
+            for i in range(len(alertColumnWidths)):
+                self.ui.alert_list.setColumnWidth(i, alertColumnWidths[i])
+            
+            #config page setup
+            self.ui.rebuild_db_button.clicked.connect(self.rebuildDBPressed)
+            self.signals.progBarChange.connect(self.updateBar)
+            self.signals.loadTextChange.connect(self.updateLoadingText)
+            self.signals.buildDBComplete.connect(self.startPriceLoop)
+            self.signals.priceHistoryComplete.connect(self.priceHistoryComplete)
+            self.signals.killPriceLoop.connect(self.loopWorker.kill)
+            self.signals.newItem.connect(self.newItem)
+            self.signals.graphReady.connect(self.updatePlot)
+            self.ui.history_button.toggled['bool'].connect(self.onHistoryButtonToggle)
+            self.signals.newAlerts.connect(self.updateAlerts)
+
+            #graph page setup
+            self.ui.graph_button.clicked.connect(self.onGraphButtonToggle)
+            self.ui.config_button.clicked.connect(self.onConfigButtonToggle)
+            self.updateConfigBoxes()
+            self.ui.main_stack_widget.setCurrentIndex(0)
+            #confirm that database exists and build has been finished
+            if os.path.isfile("database.db"):
+                try:
+                    database = sqlite3.connect('database.db')
+                    cursor = database.cursor()
+                    cursor.execute("SELECT id FROM filteredDB WHERE tracked=FALSE")
+                    result = cursor.fetchall()
+                    database.close()
+                    if len(result) == 0:
+                        self.startPriceLoop()
+                        self.activateMainWindow()
+                        #self.updateGraphPage("2")
+                        self.ui.main_stack_widget.setCurrentIndex(1)
+                        self.ui.graph_button.setChecked(True)
+                    else:
+                        worker = Worker(self.buildPriceHistoryDB)
+                        self.threadpool.start(worker)
+                except Exception as e:
+                    print(e)
                 else:
-                    worker = Worker(self.buildPriceHistoryDB)
-                    self.threadpool.start(worker)
-            except Exception as e:
-                print(e)
-        else:
-            print("no DB exists")
+                    print("no DB exists")
+                print("MainWindow.__init__ complete")
+            print("__init__ ended...")
+        except Exception as e:
+            print(f"Critical error in MainWindow.__init__: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 
     def newItem(self, itemID):
+        print("new item received:", itemID)
         self.updateGraphPage(itemID)
     def updatePlot(self, fig):
         html = fig.to_html(include_plotlyjs='cdn')
-        self.ui.mainGraph.setHtml(html, QUrl())
+        try:
+            self.ui.mainGraph.setHtml(html, QUrl())
+        except Exception as e:
+            print(f"Error updating plot: {e}")
 
     def startPriceLoop(self):
         #self.threadpool.start(self.loopWorker)
-        print("test")
+        print("Starting price loop")
     def activateMainWindow(self):
+        print("Setting up main window")
         self.ui.graph_button.setEnabled(True)
         self.ui.search_bar.setEnabled(True)
-        self.updateGraphPage("2")
         alerts = []
         alerts.append(alert(2, "cobonal", "-50", "-20", "-40", "2000", "123992"))
         self.signals.newAlerts.emit(alerts)
+        print("main window setup complete")
     
     def updateGraphPage(self, itemID):
         print(f"updating graph with {itemID}")
@@ -210,17 +241,18 @@ class MainWindow(QMainWindow):
     def updateLoadingText(self, text):
         self.ui.loading_label.setText(text)
     def onGraphButtonToggle(self):
-        self.ui.mainPageView.setCurrentIndex(1)
+        self.ui.main_stack_widget.setCurrentIndex(1)
+        print("test")
     def onConfigButtonToggle(self):
         worker = Worker(self.updateConfigBoxes)
         self.threadpool.start(worker)
-        self.ui.mainPageView.setCurrentIndex(0)
+        self.ui.main_stack_widget.setCurrentIndex(0)
     def onHistoryButtonToggle(self, state):
         if state:
             self.ui.historyList.setVisible(True)
         else:
             self.ui.historyList.setVisible(False)
-
+    
     def updateAlerts(self, alerts):
         for alert in alerts:
             self.ui.alert_list.insertRow(0)
@@ -275,6 +307,7 @@ class MainWindow(QMainWindow):
         self.ui.mhvc_line.setPlaceholderText(str(minHighVolChange))  
 
     def buildPriceHistoryDB(self):
+        print("price history build starting...")
         self.ui.splash_stacked.setCurrentIndex(1)
         self.signals.progBarChange.emit(0)
         self.signals.loadTextChange.emit("Building price history")
@@ -328,6 +361,7 @@ class MainWindow(QMainWindow):
                 database.commit()
                 time.sleep(1)
         database.close()
+        print("price history build complete...")
         self.signals.priceHistoryComplete.emit()
 
     def itemPriceLoop(self):
@@ -397,101 +431,107 @@ class MainWindow(QMainWindow):
                 time.sleep(60)
 
     def buildDB(self):
-        #set page to splash screen
-        self.signals.killPriceLoop.emit()
-        self.ui.splash_stacked.setCurrentIndex(1)
-        self.signals.progBarChange.emit(0)
-        self.signals.loadTextChange.emit("Building filtered list")
-        #determine filter values
-        if self.ui.mblv_line.text() == '':
-            minBuyLimitValue = self.ui.mblv_line.placeholderText()
-        else:
-            minBuyLimitValue = self.ui.mblv_line.text()
-        if self.ui.mp_line.text() == '':
-            maxPrice = self.ui.mp_line.placeholderText()
-        else:
-            maxPrice = self.ui.mp_line.text()
-        if self.ui.mhvt_line.text() == '':
-            minHourlyThroughput = self.ui.mhvt_line.placeholderText()
-        else:
-            minHourlyThroughput = self.ui.mhvt_line.text()
-        if self.ui.mhv_line.text() == '':
-            minHourlyVolume = self.ui.mhv_line.placeholderText()
-        else:
-            minHourlyVolume = self.ui.mhv_line.text()
-        
+        print("buildDB starting...")
         try:
-            minBuyLimitValue = textToInt(minBuyLimitValue)
-            maxPrice = textToInt(maxPrice)
-            minHourlyThroughput = textToInt(minHourlyThroughput)
-            minHourlyVolume = textToInt(minHourlyVolume)
-        except Exception as e:
-            print("invalid input: ")
-            print(e)
-            return False
-        
-        filterConfig = {"minBuyLimitValue": minBuyLimitValue, "minHourlyThroughput": minHourlyThroughput, "minHourlyVolume": minHourlyVolume, "maxPrice": maxPrice}
-        with open(filterConfigFile, "w") as f:
-            json.dump(filterConfig, f)
-        print("filter config saved")
-        try:
-            minBuyLimitValue = filterConfig.get('minBuyLimitValue')
-            minHourlyThroughput = filterConfig.get('minHourlyThroughput')
-            minHourlyVolume = filterConfig.get('minHourlyVolume')
-            maxPrice = filterConfig.get('maxPrice')
-        except Exception as e:
-            print("invalid filter config")
-            raise e
-        #delete prior DB if exists
-        while os.path.isfile("database.db"):
-            try:
-                os.remove("database.db")
-                print("deleted database.db")
-            except Exception as e:
-                print(e)
-                time.sleep(1)
-        while os.path.isfile("priceHistory5m.db"):
-            try:
-                os.remove("priceHistory5m.db")
-                print("deleted priceHistory5m.db")
-            except Exception as e:
-                print(e)
-                time.sleep(1)
-
-        #build filtered item list
-        itemList = json.loads(requests.get(itemListURL, headers = headers).text)
-        tempItemList = {}
-        watchCount = 0
-        for item in itemList.keys():
-            if isinstance(itemList[item], int) or isinstance(itemList[item], float):
-                print("invalid item")
+            #set page to splash screen
+            self.signals.killPriceLoop.emit()
+            self.ui.splash_stacked.setCurrentIndex(1)
+            self.signals.progBarChange.emit(0)
+            self.signals.loadTextChange.emit("Building filtered list")
+            #determine filter values
+            if self.ui.mblv_line.text() == '':
+                minBuyLimitValue = self.ui.mblv_line.placeholderText()
             else:
+                minBuyLimitValue = self.ui.mblv_line.text()
+            if self.ui.mp_line.text() == '':
+                maxPrice = self.ui.mp_line.placeholderText()
+            else:
+                maxPrice = self.ui.mp_line.text()
+            if self.ui.mhvt_line.text() == '':
+                minHourlyThroughput = self.ui.mhvt_line.placeholderText()
+            else:
+                minHourlyThroughput = self.ui.mhvt_line.text()
+            if self.ui.mhv_line.text() == '':
+                minHourlyVolume = self.ui.mhv_line.placeholderText()
+            else:
+                minHourlyVolume = self.ui.mhv_line.text()
+            
+            try:
+                minBuyLimitValue = textToInt(minBuyLimitValue)
+                maxPrice = textToInt(maxPrice)
+                minHourlyThroughput = textToInt(minHourlyThroughput)
+                minHourlyVolume = textToInt(minHourlyVolume)
+            except Exception as e:
+                print("invalid input: ")
+                print(e)
+                return False
+            
+            filterConfig = {"minBuyLimitValue": minBuyLimitValue, "minHourlyThroughput": minHourlyThroughput, "minHourlyVolume": minHourlyVolume, "maxPrice": maxPrice}
+            with open(filterConfigFile, "w") as f:
+                json.dump(filterConfig, f)
+            print("filter config saved")
+            try:
+                minBuyLimitValue = filterConfig.get('minBuyLimitValue')
+                minHourlyThroughput = filterConfig.get('minHourlyThroughput')
+                minHourlyVolume = filterConfig.get('minHourlyVolume')
+                maxPrice = filterConfig.get('maxPrice')
+            except Exception as e:
+                print("invalid filter config")
+                raise e
+            #delete prior DB if exists
+            while os.path.isfile("database.db"):
                 try:
-                    limitValue = itemList[item].get("limit") * itemList[item].get("price")
-                    hourlyThroughput = itemList[item].get("volume") * itemList[item].get("price")
-                    itemPrice = itemList[item].get("price")
-                    if (hourlyThroughput > minHourlyThroughput and limitValue > minBuyLimitValue and itemPrice < maxPrice and itemList[item].get("volume") > minHourlyVolume):
-                        tempItemList[item] = itemList[item]
-                        watchCount = watchCount + 1
-                except:
-                    print("error in entry for item {item}", item)
+                    os.remove("database.db")
+                    print("deleted database.db")
+                except Exception as e:
+                    print(e)
+                    time.sleep(1)
+            while os.path.isfile("priceHistory5m.db"):
+                try:
+                    os.remove("priceHistory5m.db")
+                    print("deleted priceHistory5m.db")
+                except Exception as e:
+                    print(e)
+                    time.sleep(1)
 
-        
-        database = sqlite3.connect("database.db")
-        cursor = database.cursor()
-        cursor.execute("CREATE TABLE if NOT EXISTS filteredDB" + filteredItemListValues)
-        for item in tempItemList:
-            id = tempItemList[item].get('id')
-            name = tempItemList[item].get('name').replace(" ", "_")
-            limit = tempItemList[item].get('limit')
-            value = tempItemList[item].get('value')
-            highAlch = tempItemList[item].get('highalch')
-            cursor.execute("INSERT INTO filteredDB (id, itemName, buyLimit, value, highAlch, tracked) VALUES(?, ?, ?, ?, ?, ?);", (id, name, limit, value, highAlch, False))
-        database.commit()
-        database.close()
-        ### placeholder for updating watchcount in gui
-        self.signals.buildDBComplete.emit()
-        self.buildPriceHistoryDB()
+            #build filtered item list
+            itemList = json.loads(requests.get(itemListURL, headers = headers).text)
+            tempItemList = {}
+            watchCount = 0
+            for item in itemList.keys():
+                if isinstance(itemList[item], int) or isinstance(itemList[item], float):
+                    print("invalid item")
+                else:
+                    try:
+                        limitValue = itemList[item].get("limit") * itemList[item].get("price")
+                        hourlyThroughput = itemList[item].get("volume") * itemList[item].get("price")
+                        itemPrice = itemList[item].get("price")
+                        if (hourlyThroughput > minHourlyThroughput and limitValue > minBuyLimitValue and itemPrice < maxPrice and itemList[item].get("volume") > minHourlyVolume):
+                            tempItemList[item] = itemList[item]
+                            watchCount = watchCount + 1
+                    except:
+                        print("error in entry for item {item}", item)
+
+            
+            database = sqlite3.connect("database.db")
+            cursor = database.cursor()
+            cursor.execute("CREATE TABLE if NOT EXISTS filteredDB" + filteredItemListValues)
+            for item in tempItemList:
+                id = tempItemList[item].get('id')
+                name = tempItemList[item].get('name').replace(" ", "_")
+                limit = tempItemList[item].get('limit')
+                value = tempItemList[item].get('value')
+                highAlch = tempItemList[item].get('highalch')
+                cursor.execute("INSERT INTO filteredDB (id, itemName, buyLimit, value, highAlch, tracked) VALUES(?, ?, ?, ?, ?, ?);", (id, name, limit, value, highAlch, False))
+            database.commit()
+            database.close()
+            ### placeholder for updating watchcount in gui
+            self.signals.buildDBComplete.emit()
+            self.buildPriceHistoryDB()
+        except Exception as e:
+            print(f"Error in buildDB: {e}")
+            import traceback
+            traceback.print_exc()
 
     def priceHistoryComplete(self):
         self.signals.progBarChange.emit(100)
@@ -538,7 +578,7 @@ class MainWindow(QMainWindow):
         return {"avgLowPrice": avgLowPrice, "avgHighPrice": avgHighPrice, "avgLowVol": avgLowVol, "avgHighVol": avgHighVol}
     
     def plotPrep(self, itemID):
-        database = sqlite3.connect('itemData.db')
+        database = sqlite3.connect('database.db')
         cursor = database.cursor()
         cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
         command = "SELECT name FROM priceHistory5m.sqlite_master WHERE type='table' AND name='itemID" + itemID + "';"
@@ -574,13 +614,58 @@ class MainWindow(QMainWindow):
             print(f"no table for {itemID}")
             database.close()
 
+    def closeEvent(self, event):
+        print("Window close event triggered!")
+        super().closeEvent(event)
+        print(event)
+
+    def showEvent(self, event):
+        print("MainWindow.showEvent()")
+        traceback.print_stack(limit=10)
+        super().showEvent(event)
+
+    def hideEvent(self, event):
+        print("MainWindow.hideEvent()")
+        traceback.print_stack(limit=10)
+        super().hideEvent(event)
+
+    def changeEvent(self, event):
+        # captures minimize/restore and other state changes
+        if event.type() == QEvent.Type.WindowStateChange:
+            print(f"MainWindow.changeEvent: state={self.windowState()}")
+        super().changeEvent(event)
+
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    ## load style
-    with open("theme.qss") as theme:
-        theme_str = theme.read()
-    app.setStyleSheet(theme_str)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+    try:
+        if QApplication.instance() is None:
+            app = QApplication(sys.argv)
+        else:
+            app = QApplication.instance()
+        
+        ## load style
+        with open("theme.qss") as theme:
+            theme_str = theme.read()
+        app.setStyleSheet(theme_str)
+
+        if not hasattr(app, "main_window"):
+            app.main_window = MainWindow()
+        window = app.main_window
+
+        print("About to show window")
+        window.show()
+        
+        
+        # debug: print top-level widgets now and in 1s
+        def dump_toplevels():
+            tops = QApplication.topLevelWidgets()
+            print("Top-level widgets:", [type(w).__name__ for w in tops])
+            print("QApplication.instance():", QApplication.instance())
+        dump_toplevels()
+        QTimer.singleShot(1000, dump_toplevels)
+        print("Window shown, about to exec()")
+        app.exec()
+    except Exception as e:
+            print(f"Error in startup: {e}")
+            import traceback
+            traceback.print_exc()
 
