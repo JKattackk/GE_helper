@@ -123,7 +123,7 @@ class MainWindow(QMainWindow):
             #graph setup
             try:
                 #prevents window flicker during startup
-                self.ui.mainGraph.page().setBackgroundColor(QColor(0,0,0,0))
+                self.ui.mainGraph.page().setBackgroundColor(QColor(255,255,255,0))
                 self.ui.mainGraph.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
                 # calling winId() forces creation of the native window handle
                 _ = self.ui.mainGraph.winId()
@@ -608,7 +608,8 @@ class MainWindow(QMainWindow):
             fig.add_trace(go.Histogram(histfunc="sum", x=time, y=low, marker_color="dodgerblue", xbins=dict(size=1000)), row=2, col=1)
 
             fig.update_layout(bargap=0.1, bargroupgap=0.05, showlegend = False, margin=dict(l=8, r=8, t=8, b=8),
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', autosize=True)
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(255,255,255,0.06)', autosize=True
+            , font=dict(color="#F9F6EE"))
 
             self.signals.graphReady.emit(fig)
         else:

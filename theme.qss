@@ -7,7 +7,7 @@
 }
 
 #alert_list {
-	background-color: #1be792;
+	background-color: #595d61;
 }
 
 #sidebar_widget {
@@ -26,13 +26,58 @@
 }
 QPushButton{
 	color: #f5f5f5;
-	background-color: rgb(63, 58, 58);
-	border-radius: 5px;
-	border-color: black;
+	background-color: rgba(0, 0, 0, 0);
+	border-style: ridge;
+	border-radius: 0px;
+	border-color: rgba(255, 255, 255, 40);
+	border-top-width: 1px;
+	border-bottom-width: 1px;
 	font: bold 14px;
 }
 
-QLabel{
+QPushButton:checked{
 	color: #f5f5f5;
+	background-color: rgba(255, 255, 255, 10);
+	border-style:inset;
+	border-radius: 0px;
+	border-color: rgba(255, 255, 255, 40);
+	border-top-width: 1px;
+	border-bottom-width: 1px;
+	font: bold 14px;
+}
+QPushButton#config_button{
+	border-top-width: 2px;
+	border-bottom-width: 2px;
+}
+QPushButton#trends_button{
+	border-bottom-width: 2px;
+}
+QPushButton#graph_button{
+	border-top-width: 0px;
+}
+QLabel{
+	color: #F9F6EE;
 	font: 14px;
+}
+QFrame#header_bar{
+	border-bottom-width: 2px;
+	border-style: ridge;
+	border-color: rgba(255, 255, 255, 40);
+}
+QWidget#icon_area{
+	border-bottom-width: 2px;
+	border-style: ridge;
+	border-color: rgba(255, 255, 255, 40);
+}
+QFrame#graph_info_frame{
+	border-width: 2px;
+	border-style:inset;
+	border-color: rgba(255, 255, 255, 40);
+	color: rgba(255, 255, 255, 10);
+}
+QFrame#main_graph_frame{
+	border-width: 2px;
+	border-style: inset;
+	border-color: rgba(255, 255, 255, 40);
+	color: rgba(255, 255, 255, 10);
 }
