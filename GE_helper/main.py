@@ -16,6 +16,7 @@ from PyQt6.QtWebEngineWidgets import QWebEngineView
 from output import Ui_MainWindow
 from PyQt6.QtGui import QColor
 from PyQt6.QtGui import QFontDatabase
+import numpy as np
 #pyuic6 -o .\GE_helper\output.py .\GE_helper\newUI.ui
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -586,31 +587,109 @@ class MainWindow(QMainWindow):
         query = cursor.execute(command)
         if not query.fetchone() == None:
             tableName = "priceHistory5m.itemID" + itemID
-            command = "SELECT timestamp, avgHighPrice, avgLowPrice FROM " + tableName
-            query = cursor.execute(command)
-            dat = query.fetchall()
-            fig = make_subplots(rows=2, cols=1, row_heights=[0.8, 0.2], shared_xaxes=True, vertical_spacing=0.05)
-            time = [point[0] for point in dat]
-            high = [point[1] for point in dat]
-            low = [point[2] for point in dat]
-
-            fig.add_trace(go.Scatter(x=time, y=high, mode='lines+markers',marker_color="orange"), row=1, col=1)
-            fig.add_trace(go.Scatter(x=time, y=low, mode='lines+markers',marker_color="dodgerblue"), row=1, col=1)
-            
-
-            command = "SELECT lowPriceVolume, highPriceVolume FROM " + tableName
+            command = "SELECT timestamp, avgHighPrice, avgLowPrice, highPriceVolume, lowPriceVolume FROM " + tableName
             query = cursor.execute(command)
             dat = query.fetchall()
             database.close()
-            high = [point[0] for point in dat]
-            low = [point[1] for point in dat]
-            fig.add_trace(go.Histogram(histfunc="sum", x=time, y=high, marker_color="orange", xbins=dict(size=1000)), row=2, col=1)
-            fig.add_trace(go.Histogram(histfunc="sum", x=time, y=low, marker_color="dodgerblue", xbins=dict(size=1000)), row=2, col=1)
 
-            fig.update_layout(bargap=0.1, bargroupgap=0.05, showlegend = False, margin=dict(l=8, r=8, t=8, b=8),
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(255,255,255,0.06)', autosize=True
-            , font=dict(color="#F9F6EE"))
+            data = {
+                'time': np.fromiter((row[0] for row in dat), dtype=np.int64),
+                'highPrice': np.fromiter((row[1] if row[1] is not None else np.nan for row in dat), dtype=np.float64),
+                'lowPrice':  np.fromiter((row[2] if row[2] is not None else np.nan for row in dat), dtype=np.float64),
+                'highVol':   np.fromiter((row[3] if row[3] is not None else 0 for row in dat), dtype=np.float64),
+                'lowVol':    np.fromiter((row[4] if row[4] is not None else 0 for row in dat), dtype=np.float64)
+            }
+            df = pd.DataFrame(data)
+            #convert to datetime
+            df['datetime'] = pd.to_datetime(df['time'], unit='s', utc=True)
 
+            #Downsample / aggregate if dataset is large to keep interactive performance
+            max_points = 3000
+            n = len(df)
+            if n == 0:
+                print("no data points")
+                return
+
+            if n > max_points:
+                step = max(1, n // max_points)
+                df_price = df.iloc[::step].copy()   
+            else:
+                df_price = df
+
+            #Aggregate volumes into bins
+            max_bins = 200
+            #choose bin frequency based on total span
+            total_seconds = (df['datetime'].iloc[-1] - df['datetime'].iloc[0]).total_seconds()
+            if total_seconds <= 0:
+                vol_bins = '1H'
+            else:
+                approx_bin_seconds = max(60, int(total_seconds / max_bins))
+                mins = max(1, approx_bin_seconds // 60)
+                vol_bins = f'{mins}T'
+
+            try:
+                vol_group = df.set_index('datetime').resample(vol_bins).sum()[['highVol','lowVol']].reset_index()
+            except Exception:
+                vol_group = df[['datetime','highVol','lowVol']]
+
+            fig = make_subplots(rows=2, cols=1, row_heights=[0.78, 0.22], shared_xaxes=True, vertical_spacing=0.03)
+
+            fig.add_trace(
+                go.Scattergl(
+                    x=df_price['datetime'].to_numpy(),
+                    y=df_price['highPrice'].to_numpy(),
+                    mode='lines',
+                    line=dict(color='orange', width=1),
+                    hovertemplate='%{x}<br>High: %{y}<extra></extra>'
+                ),
+                row=1, col=1
+            )
+            fig.add_trace(
+                go.Scattergl(
+                    x=df_price['datetime'].to_numpy(),
+                    y=df_price['lowPrice'].to_numpy(),
+                    mode='lines',
+                    line=dict(color='dodgerblue', width=1),
+                    hovertemplate='%{x}<br>Low: %{y}<extra></extra>'
+                ),
+                row=1, col=1
+            )
+
+            fig.add_trace(
+                go.Bar(
+                    x=vol_group['datetime'],
+                    y=vol_group['highVol'],
+                    marker_color='orange',
+                    name='highVol',
+                    showlegend=False
+                ),
+                row=2, col=1
+            )
+            fig.add_trace(
+                go.Bar(
+                    x=vol_group['datetime'],
+                    y=vol_group['lowVol'],
+                    marker_color='dodgerblue',
+                    name='lowVol',
+                    showlegend=False
+                ),
+                row=2, col=1
+            )
+
+ 
+            fig.update_layout(
+                margin=dict(l=6, r=6, t=6, b=6),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                hovermode='x unified',
+                showlegend=False,
+                autosize=True,
+                font=dict(color="#F9F6EE")
+            )
+            fig.update_xaxes(type='date', tickformat='%H:%M\n%d-%m-%Y', row=1, col=1)
+            fig.update_yaxes(automargin=True)
+
+            # Emit the prepared figure back to the main thread for rendering
             self.signals.graphReady.emit(fig)
         else:
             print(f"no table for {itemID}")
