@@ -40,7 +40,7 @@ def_minBuyLimitValue = 2000000
 def_minHourlyThroughput = 5000000
 def_minHourlyVolume = 1000
 def_maxPrice = 10000000
-def_priceChangePercent = 100
+def_priceChangePercent = 10
 def_volChangePercent = 100
 
 
@@ -126,13 +126,13 @@ class StatusIndicator(QWidget):
 
 class alert:
     def __init__(self, id, name, lowPriceChange, highPriceChange, lowVolChange, highVolChange, timestamp):
-        self.id = id
-        self.name = name
-        self.lowPriceChange = lowPriceChange
-        self.highPriceChange = highPriceChange
-        self.lowVolChange = lowVolChange
-        self.highVolChange = highVolChange
-        self.timestamp = timestamp
+        self.id = str(id)
+        self.name = str(name)
+        self.lowPriceChange = f"{lowPriceChange:.2f}%"
+        self.highPriceChange = f"{highPriceChange:.2f}%"
+        self.lowVolChange = f"{lowVolChange:.2f}%"
+        self.highVolChange = f"{highVolChange:.2f}%"
+        self.timestamp = str(timestamp)
     
 class signals(QObject):
     #indicates new price update. Includes unix timestamp of last update
@@ -258,7 +258,7 @@ class MainWindow(QMainWindow):
                             tableName = "priceHistory5m.itemID" + item[0]
                             command = "SELECT timeStamp from " + tableName + " ORDER BY timeStamp DESC LIMIT 1"
                             lastEntryTime = int(cursor.execute(command).fetchone()[0])
-                            if (curTime - lastEntryTime) > 60*5:
+                            if (curTime - lastEntryTime) > 60*7:
                                 repairList[item[0]] = lastEntryTime
                         if len(repairList) > 0:
                             print(f"found ({len(repairList)}) items needing repair")
@@ -332,7 +332,7 @@ class MainWindow(QMainWindow):
             print(f"Error updating plot: {e}")
 
     def startPriceLoop(self):
-        #self.threadpool.start(self.loopWorker)
+        self.threadpool.start(self.loopWorker)
         print("Starting price loop")
 
     def activateMainWindow(self):
@@ -740,15 +740,14 @@ class MainWindow(QMainWindow):
             if worker.is_killed:
                 break
             if (int(time.time()) - int(lastUpdate)) > 510:
-                database = sqlite3.connect('itemData.db')
+                database = sqlite3.connect('database.db')
                 cursor = database.cursor()
                 cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
                 alerts = []
                 url = "https://prices.runescape.wiki/api/v1/osrs/5m"
                 response = json.loads(requests.get(url, headers = headers).text)
                 lastUpdate = response.get('timestamp')
-                print(response.get('timestamp'))
-                print(time.time())
+                print(lastUpdate)
                 trackedIDs = cursor.execute('SELECT id from filteredDB WHERE tracked=TRUE').fetchall()
                 for id in trackedIDs:
                     id_str = ''.join(str(value) for value in id)
@@ -767,7 +766,7 @@ class MainWindow(QMainWindow):
                                 avgHighPrice = response.get('data').get(id_str).get('avgHighPrice')
                                 lowPriceVolume = response.get('data').get(id_str).get('lowPriceVolume')
                                 highPriceVolume = response.get('data').get(id_str).get('highPriceVolume')
-                                command = "INSERT INTO " + tableName + "(timeStamp, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume) VALUES(?, ?, ?, ?, ?);"
+                                command = "INSERT OR IGNORE INTO " + tableName + "(timeStamp, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume) VALUES(?, ?, ?, ?, ?);"
                                 cursor.execute(command, (lastUpdate, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume))
                                 
                                  ##  price and volume change metrics, alerts.
@@ -790,12 +789,14 @@ class MainWindow(QMainWindow):
                                     highVolChange = 0
                                 command = "UPDATE filteredDB set lowPrice = ?, highPrice = ?, lowVolume = ?, highVolume = ?, lowPriceChange = ?, highPriceChange = ?, lowVolumeChange = ?, highVolumeChange = ? WHERE id = ?"
                                 cursor.execute(command, (avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume, lowPriceChange, highPriceChange, lowVolChange, highVolChange, id[0]))
-                                if (lowPriceChange < def_priceChangePercent or highPriceChange < def_priceChangePercent) and (lowVolChange > def_volChangePercent or highVolChange > def_volChangePercent):
+                                if (abs(lowPriceChange) >= def_priceChangePercent or abs(highPriceChange) >= def_priceChangePercent) and (lowVolChange >= def_volChangePercent or highVolChange >= def_volChangePercent):
                                     command = "SELECT itemName FROM filteredDB WHERE id = ?"
                                     name = cursor.execute(command, id).fetchone()[0]
-                                    alerts.append({"id": id[0], "name": name, "lowPriceChange": lowPriceChange, "highPriceChange": highPriceChange, "lowVolChange": lowVolChange, "highVolChange": highVolChange, "timestamp": lastUpdate})
+                                    a = alert(id= str(id[0]), name = name, lowPriceChange = lowPriceChange, highPriceChange = highPriceChange, 
+                                                  lowVolChange = lowVolChange, highVolChange = highVolChange, timestamp = lastUpdate)
+                                    alerts.append(a)
                                     print("?: low price ?%, high price ?%, low volume ?%, high volume ?%", (name, lowPriceChange, highPriceChange, lowVolChange, highVolChange))
-                self.updateAlerts(alerts)
+                self.signals.newAlerts.emit(alerts)
                 database.commit()
                 database.close()
                 time.sleep(60)
