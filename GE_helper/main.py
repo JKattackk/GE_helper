@@ -14,11 +14,13 @@ from PyQt6.QtCore import *
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from output import Ui_MainWindow
-from PyQt6.QtGui import QColor
-from PyQt6.QtGui import QFontDatabase
+from PyQt6.QtGui import QColor, QPainter, QBrush, QPen, QFontDatabase, QMouseEvent, QPaintEvent, QEnterEvent
 import numpy as np
+from datetime import datetime
+import weakref
+import threading
+
 #pyuic6 -o .\GE_helper\output.py .\GE_helper\newUI.ui
-script_dir = os.path.dirname(os.path.abspath(__file__))
 
 itemListURL = "https://chisel.weirdgloop.org/gazproj/gazbot/os_dump.json"
 priceHistory5mURL = url = "https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=5m&id="
@@ -29,6 +31,8 @@ headers = {
 }
 
 filteredItemListValues = "(id INTEGER PRIMARY KEY, itemName, buyLimit, lowPrice, highPrice, value, highAlch, lowVolume, highVolume, lowPriceChange, highPriceChange, lowVolumeChange, highVolumeChange, timestamp, tracked)"
+priceHistory5mValues = "(timeStamp INTEGER NOT NULL PRIMARY KEY, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume)"
+
 alertConfigFile = "cfg/alertConfig.json"
 filterConfigFile = "cfg/filterConfig.json"
 
@@ -37,11 +41,14 @@ def_minBuyLimitValue = 2000000
 def_minHourlyThroughput = 5000000
 def_minHourlyVolume = 1000
 def_maxPrice = 10000000
-
 def_priceChangePercent = 100
 def_volChangePercent = 100
-alertColumnWidths = [256, 64, 64, 50, 64, 64, 128]
 
+
+
+# global registry of active Worker instances (weakrefs avoid leaks)
+active_workers = weakref.WeakSet()
+active_workers_lock = threading.Lock()
 
 def textToInt(string):
     try:
@@ -59,6 +66,66 @@ def textToInt(string):
                 num = num * 10^9
             case default:
                 raise ValueError
+            
+class StatusIndicator(QWidget):
+    """Simple circular status light with tooltip support."""
+    PRESETS = {
+        "initializing": QColor("#FFFFFF"),
+        "ok": QColor("#41e968"),
+        "working": QColor("#f3a033"),
+        "error": QColor("#e53935"),
+        "off": QColor("#808080")
+    }
+    def __init__(self, parent=None, diameter=14):
+        super().__init__(parent)
+        self._diameter = diameter
+        self._color = self.PRESETS["initializing"]
+        self.setFixedSize(self._diameter + 4, self._diameter + 4)
+        # set a default tooltip; UI code can update later
+        self.setToolTip("Status: unset")
+
+    def set_status(self, name_or_color, tooltip: str | None = None):
+        """Set named status (ok/warn/error/off/busy) or pass a QColor / hex string.
+        Optionally update the tooltip text.
+        """
+        if isinstance(name_or_color, QColor):
+            self._color = name_or_color
+        else:
+            # allow hex strings or preset names
+            if isinstance(name_or_color, str) and name_or_color.startswith("#"):
+                self._color = QColor(name_or_color)
+            else:
+                self._color = self.PRESETS.get(str(name_or_color).lower(), self.PRESETS["off"])
+        if tooltip is not None:
+            self.setToolTip(tooltip)
+        self.update()
+
+    def set_status_color(self, qcolor: QColor, tooltip: str | None = None):
+        self.set_status(qcolor, tooltip)
+
+    def paintEvent(self, event: QPaintEvent):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        # draw subtle outer ring
+        pen = QPen(QColor(0,0,0,60))
+        pen.setWidth(1)
+        p.setPen(pen)
+        brush = QBrush(self._color)
+        p.setBrush(brush)
+        r = self.rect().adjusted(2, 2, -2, -2)
+        p.drawEllipse(r)
+        p.end()
+
+    def enterEvent(self, event: QEnterEvent):
+        # show tooltip immediately on hover for clearer UX
+        tip = self.toolTip()
+        if tip:
+            QToolTip.showText(self.mapToGlobal(self.rect().bottomLeft()), tip, self)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        QToolTip.hideText()
+        super().leaveEvent(event)
 
 class alert:
     def __init__(self, id, name, lowPriceChange, highPriceChange, lowVolChange, highVolChange, timestamp):
@@ -84,6 +151,10 @@ class signals(QObject):
     priceHistoryComplete = pyqtSignal()
     killPriceLoop = pyqtSignal()
 
+    newInProgressItem = pyqtSignal(object)
+    newProgressUpdate = pyqtSignal(object)
+    inProgressItemComplete = pyqtSignal(object)
+
 class Worker(QRunnable):
     """Worker thread."""
     def __init__(self, fn, *args, **kwargs):
@@ -92,35 +163,67 @@ class Worker(QRunnable):
         self.args = args
         self.kwargs = kwargs
         self.is_killed = False
+        self.statusString = ''
 
     @pyqtSlot()
     def run(self):
         """Initialise the runner function with passed args, kwargs."""
         try:
+            # register self as active
+            with active_workers_lock:
+                active_workers.add(self)
             print(f"Worker starting: {self.fn.__name__}")
             self.is_killed = False
-            self.fn(*self.args, **self.kwargs)
+            self.fn(*self.args, **self.kwargs, worker= self)
             print(f"Worker completed: {self.fn.__name__}")
         except Exception as e:
             print(f"Error in worker thread: {e}")
             traceback.print_exc()
-
+        finally:
+            with active_workers_lock:
+                try:
+                    active_workers.discard(self)
+                except Exception:
+                    pass
     def kill(self):
         self.is_killed = True
+    def getStatusString(self):
+        return self.statusString
+    def setStatusString(self, status):
+        self.statusString = status
 
+def get_active_workers_snapshot():
+    with active_workers_lock:
+        return list(active_workers)
 class MainWindow(QMainWindow):
     def __init__(self):
         print("starting __init__...")
         try:
-            print("Constructing MainWindow instance", id(self))
+            self.inProgressItems = []
+            self.localList = []
             self.threadpool = QThreadPool()
             thread_count = self.threadpool.maxThreadCount()
             print(f"Multithreading with maximum {thread_count} threads")
-
+            print("Constructing MainWindow instance", id(self))
             super(MainWindow, self).__init__()
             self.ui = Ui_MainWindow()
             self.ui.setupUi(self)
-
+            #status indicator setup
+            try:
+                placeholder = self.ui.indicator_widget  # placeholder created by .ui
+                if placeholder.layout() is None:
+                    placeholder.setLayout(QHBoxLayout())
+                while placeholder.layout().count():
+                    it = placeholder.layout().takeAt(0)
+                    w = it.widget()
+                    if w:
+                        w.setParent(None)
+                self.status_indicator = StatusIndicator(self)
+                placeholder.layout().setContentsMargins(0,0,0,0)
+                placeholder.layout().addWidget(self.status_indicator, 0, Qt.AlignmentFlag.AlignCenter)
+            except Exception:
+                pass
+            
             #graph setup
             try:
                 #prevents window flicker during startup
@@ -132,48 +235,55 @@ class MainWindow(QMainWindow):
                 pass
 
             self.loopWorker = Worker(self.itemPriceLoop)
-
             self.signals = signals()
             self.setup_signals()
 
             self.ui.history_list.setVisible(False)
-
-            #alert setup
-            for i in range(len(alertColumnWidths)):
-                self.ui.alert_list.setColumnWidth(i, alertColumnWidths[i])
             
             #graph page setup
             self.updateConfigBoxes()
             self.ui.main_stack_widget.setCurrentIndex(0)
+
             #confirm that database exists and build has been finished
             if os.path.isfile("database.db"):
                 try:
                     database = sqlite3.connect('database.db')
                     cursor = database.cursor()
+                    cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
                     cursor.execute("SELECT id FROM filteredDB WHERE tracked=FALSE")
                     result = cursor.fetchall()
-                    database.close()
+                    self.updateLocalList()
                     if len(result) == 0:
-                        self.startPriceLoop()
+                        self.ui.item_count_label.setText("items: " + str(len(self.localList)))
+                        repairList = {}
+                        curTime = int(time.time())
+                        for item in self.localList:
+                            tableName = "priceHistory5m.itemID" + item[0]
+                            command = "SELECT timeStamp from " + tableName + " ORDER BY timeStamp DESC LIMIT 1"
+                            lastEntryTime = int(cursor.execute(command).fetchone()[0])
+                            if (curTime - lastEntryTime) > 60*5:
+                                repairList[item[0]] = lastEntryTime
+                        if len(repairList) > 0:
+                            print(f"found ({len(repairList)}) items needing repair")
+                            self.repairWorker = Worker(self.repairDB, repairList)
+                            self.threadpool.start(self.repairWorker)
                         self.activateMainWindow()
-                        self.updateGraphPage("2")
-                        self.ui.main_stack_widget.setCurrentIndex(1)
-                        self.ui.graph_button.setChecked(True)
+                        database.close()
                     else:
+                        database.close()
                         worker = Worker(self.buildPriceHistoryDB)
                         self.threadpool.start(worker)
                 except Exception as e:
                     print(e)
-                else:
-                    print("no DB exists")
-                print("MainWindow.__init__ complete")
-            print("__init__ ended...")
+            else:
+                print("no DB exists")
+            print("MainWindow.__init__ complete")
+            print("__init__ ended...\n")
         except Exception as e:
             print(f"Critical error in MainWindow.__init__: {e}")
             import traceback
             traceback.print_exc()
             raise
-    
     def setup_signals(self):
         #button connections
         self.ui.rebuild_db_button.clicked.connect(self.rebuildDBPressed)
@@ -192,9 +302,31 @@ class MainWindow(QMainWindow):
         self.signals.graphReady.connect(self.updatePlot)
         self.signals.newAlerts.connect(self.updateAlerts)
 
+        self.signals.newInProgressItem.connect(self.addInProgressItem)
+        self.signals.newProgressUpdate.connect(self.updateStatus)
+        self.signals.inProgressItemComplete.connect(self.removeInProgressItem)
+
+    def addInProgressItem(self, worker):
+        self.inProgressItems.append(worker)
+        self.updateStatus()
+
+    def updateStatus(self):
+        if len(self.inProgressItems) == 0:
+            self.status_indicator.set_status(name_or_color="ok", tooltip= "No background tasks")
+        else:
+            statusText = ""
+            for worker in self.inProgressItems:
+                statusText = (statusText + worker.getStatusString() + "\n")
+            self.status_indicator.set_status(name_or_color="working", tooltip=statusText)
+
+    def removeInProgressItem(self, worker):
+        self.inProgressItems.remove(worker)
+        self.updateStatus()
+
     def newItem(self, itemID):
         print("new item received:", itemID)
         self.updateGraphPage(itemID)
+
     def updatePlot(self, fig):
         html = fig.to_html(include_plotlyjs='cdn')
         try:
@@ -205,9 +337,15 @@ class MainWindow(QMainWindow):
     def startPriceLoop(self):
         #self.threadpool.start(self.loopWorker)
         print("Starting price loop")
+
     def activateMainWindow(self):
         print("Setting up main window")
+        self.startPriceLoop()
+        self.updateGraphPage(self.localList[0][0])
+        self.ui.main_stack_widget.setCurrentIndex(1)
         self.ui.graph_button.setEnabled(True)
+        self.ui.graph_button.setChecked(True)
+
         self.ui.search_bar.setEnabled(True)
         alerts = []
         alerts.append(alert(2, "cobonal", "-50", "-20", "-40", "2000", "123992"))
@@ -266,10 +404,11 @@ class MainWindow(QMainWindow):
             self.ui.alert_list.setItem(0, 7, QTableWidgetItem(alert.timestamp))
 
     def rebuildDBPressed(self):
+        self.ui.splash_stacked.setCurrentIndex(1)
         worker = Worker(self.buildDB)
         self.threadpool.start(worker)
 
-    def updateConfigBoxes(self):
+    def updateConfigBoxes(self, worker = None):
         try:
             with open(filterConfigFile, "r") as f:
                     filterConfig = json.load(f)
@@ -308,7 +447,7 @@ class MainWindow(QMainWindow):
         self.ui.mlvc_line.setPlaceholderText(str(minLowVolChange))
         self.ui.mhvc_line.setPlaceholderText(str(minHighVolChange))  
 
-    def buildPriceHistoryDB(self):
+    def buildPriceHistoryDB(self, worker = None):
         print("price history build starting...")
         self.ui.splash_stacked.setCurrentIndex(1)
         self.signals.progBarChange.emit(0)
@@ -330,7 +469,7 @@ class MainWindow(QMainWindow):
             command = "SELECT name FROM priceHistory5m.sqlite_master WHERE type='table' AND name='itemID" + ''.join(str(value) for value in id) + "';"
             query = cursor.execute(command)
             if query.fetchone() == None:
-                command = "CREATE TABLE " + tableName + "(timeStamp, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume)"
+                command = "CREATE TABLE " + tableName + " " + priceHistory5mValues
                 cursor.execute(command)
                 response = json.loads(requests.get(priceHistory5mURL + ''.join(str(value) for value in id), headers=headers).text).get('data')
                 for item in response:
@@ -366,10 +505,10 @@ class MainWindow(QMainWindow):
         print("price history build complete...")
         self.signals.priceHistoryComplete.emit()
 
-    def itemPriceLoop(self):
+    def itemPriceLoop(self, worker = None):
         lastUpdate = -1
         while True:
-            if self.is_killed:
+            if worker.is_killed:
                 break
             if (int(time.time()) - int(lastUpdate)) > 510:
                 database = sqlite3.connect('itemData.db')
@@ -432,12 +571,17 @@ class MainWindow(QMainWindow):
                 database.close()
                 time.sleep(60)
 
-    def buildDB(self):
+    def buildDB(self, worker = None):
         print("buildDB starting...")
         try:
-            #set page to splash screen
-            self.signals.killPriceLoop.emit()
-            self.ui.splash_stacked.setCurrentIndex(1)
+            #kill workers with lengthy DB connections
+            #kill has no effect on short functions or functions without DB connections
+            for worker in get_active_workers_snapshot():
+                try:
+                    worker.kill()
+                except Exception as e:
+                    print("worker ", worker)
+                    print("Exception ", e)
             self.signals.progBarChange.emit(0)
             self.signals.loadTextChange.emit("Building filtered list")
             #determine filter values
@@ -535,10 +679,23 @@ class MainWindow(QMainWindow):
             import traceback
             traceback.print_exc()
 
+    def updateLocalList(self):
+        try:
+            database = sqlite3.connect('database.db')
+            cursor = database.cursor()
+            query = cursor.execute("SELECT id, itemName from filteredDB")
+            itemList = []
+            for item in query.fetchall():
+                itemList.append((str(item[0]), str(item[1])))
+            self.localList = itemList
+            database.close()
+        except Exception as e:
+            print(e)
+    
     def priceHistoryComplete(self):
         self.signals.progBarChange.emit(100)
         self.signals.loadTextChange.emit("you shouldn't be here")
-        self.updateConfigBoxes()
+        self.updateLocalList()
         self.ui.splash_stacked.setCurrentIndex(0)
         self.activateMainWindow()
 
@@ -579,15 +736,16 @@ class MainWindow(QMainWindow):
             avgHighVol = avgHighVol / len(highVolumes)
         return {"avgLowPrice": avgLowPrice, "avgHighPrice": avgHighPrice, "avgLowVol": avgLowVol, "avgHighVol": avgHighVol}
     
-    def plotPrep(self, itemID):
+    def plotPrep(self, itemID, worker = None):
         database = sqlite3.connect('database.db')
         cursor = database.cursor()
         cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
         command = "SELECT name FROM priceHistory5m.sqlite_master WHERE type='table' AND name='itemID" + itemID + "';"
         query = cursor.execute(command)
+        minTime = time.time() - 24*60*60 #24 hours ago
         if not query.fetchone() == None:
             tableName = "priceHistory5m.itemID" + itemID
-            command = "SELECT timestamp, avgHighPrice, avgLowPrice, highPriceVolume, lowPriceVolume FROM " + tableName
+            command = "SELECT timestamp, avgHighPrice, avgLowPrice, highPriceVolume, lowPriceVolume FROM " + tableName + " WHERE timestamp >= " + str(minTime) + ";"
             query = cursor.execute(command)
             dat = query.fetchall()
             database.close()
@@ -638,8 +796,9 @@ class MainWindow(QMainWindow):
                 go.Scattergl(
                     x=df_price['datetime'].to_numpy(),
                     y=df_price['highPrice'].to_numpy(),
-                    mode='lines',
+                    mode='lines+markers',
                     line=dict(color='orange', width=1),
+                    connectgaps=True,
                     hovertemplate='%{x}<br>High: %{y}<extra></extra>'
                 ),
                 row=1, col=1
@@ -648,8 +807,9 @@ class MainWindow(QMainWindow):
                 go.Scattergl(
                     x=df_price['datetime'].to_numpy(),
                     y=df_price['lowPrice'].to_numpy(),
-                    mode='lines',
+                    mode='lines+markers',
                     line=dict(color='dodgerblue', width=1),
+                    connectgaps=True,
                     hovertemplate='%{x}<br>Low: %{y}<extra></extra>'
                 ),
                 row=1, col=1
@@ -695,6 +855,49 @@ class MainWindow(QMainWindow):
             print(f"no table for {itemID}")
             database.close()
 
+    def repairDB(self, repairList, worker = None):
+        print("Starting DB repair...")
+        itemLen = len(repairList)
+        worker.setStatusString("Updating price hisotry: 0/%d" % itemLen)
+        self.signals.newInProgressItem.emit(worker)
+        try:
+            db = sqlite3.connect('database.db')
+            cursor = db.cursor()
+            cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
+            count = 0
+            for item in repairList:
+                if worker.is_killed:
+                    print("stopping DB repair")
+                    db.close()
+                    return None
+                tableName = "priceHistory5m.itemID" + item
+                lastEntryTime = repairList[item]
+                curTime = int(time.time())
+                if (curTime - lastEntryTime) > 60*5:  #if more than 5 minutes old
+                    response = json.loads(requests.get(priceHistory5mURL + ''.join(item), headers=headers).text).get('data')
+                    for entry in response:
+                        timestamp = entry.get('timestamp')
+                        avgHighPrice = entry.get('avgHighPrice')
+                        avgLowPrice = entry.get('avgLowPrice')
+                        highPriceVolume = entry.get('highPriceVolume')
+                        lowPriceVolume = entry.get('lowPriceVolume')
+                        command = "INSERT OR IGNORE INTO " + tableName + "(timeStamp, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume) VALUES(?, ?, ?, ?, ?);"
+                        cursor.execute(command, (timestamp, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume))
+                        db.commit()
+                count = count + 1
+                worker.setStatusString("Updating price history: %d/%d" % (count, itemLen))
+                self.signals.newProgressUpdate.emit(worker)
+                time.sleep(1)
+            db.close()
+            print("DB repair complete")
+            worker.set_status_string("")
+            self.signals.inProgressItemComplete.emit(worker)
+            
+
+        except Exception as e:
+            print("error in repairDB")
+            print(e)
+
     def closeEvent(self, event):
         print("Window close event triggered!")
         super().closeEvent(event)
@@ -728,14 +931,12 @@ if __name__ == "__main__":
             theme_str = theme.read()
             app.setStyleSheet(theme_str)
         
-
         if not hasattr(app, "main_window"):
             app.main_window = MainWindow()
         window = app.main_window
 
         print("About to show window")
         window.show()
-        
         
         # debug: print top-level widgets now and in 1s
         def dump_toplevels():
@@ -744,7 +945,7 @@ if __name__ == "__main__":
             print("QApplication.instance():", QApplication.instance())
         dump_toplevels()
         QTimer.singleShot(1000, dump_toplevels)
-        print("Window shown, about to exec()")
+        print("Window shown, about to exec()\n")
         app.exec()
     except Exception as e:
             print(f"Error in startup: {e}")

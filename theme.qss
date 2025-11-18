@@ -5,6 +5,9 @@
 #alert_area {
 	background-color: #595d61;
 }
+QTableWidget#alert_list {
+	background-color: rgba(255,255,255, .1);
+}
 
 #alert_list {
 	background-color: #595d61;
@@ -34,7 +37,9 @@ QPushButton{
 	border-bottom-width: 1px;
 	font: bold 14px;
 }
-
+QRadioButton#status_indicator{
+	color: #fa2626;
+}
 QPushButton:checked{
 	color: #f5f5f5;
 	background-color: rgba(255, 255, 255, 10);

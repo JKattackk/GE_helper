@@ -90,6 +90,18 @@
                <height>40</height>
               </size>
              </property>
+             <property name="mouseTracking">
+              <bool>true</bool>
+             </property>
+             <property name="toolTip">
+              <string comment="test" extracomment="test"/>
+             </property>
+             <property name="toolTipDuration">
+              <number>20</number>
+             </property>
+             <property name="whatsThis">
+              <string>test</string>
+             </property>
              <property name="text">
               <string>GEhelper</string>
              </property>
@@ -170,14 +182,14 @@
            <item>
             <widget class="QFrame" name="frame">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+              <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
              </property>
              <property name="minimumSize">
               <size>
-               <width>512</width>
+               <width>200</width>
                <height>40</height>
               </size>
              </property>
@@ -197,8 +209,55 @@
               <enum>QFrame::Shadow::Sunken</enum>
              </property>
              <layout class="QHBoxLayout" name="horizontalLayout_37">
+              <property name="spacing">
+               <number>0</number>
+              </property>
+              <property name="leftMargin">
+               <number>5</number>
+              </property>
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <property name="rightMargin">
+               <number>5</number>
+              </property>
+              <property name="bottomMargin">
+               <number>0</number>
+              </property>
               <item>
-               <widget class="QLabel" name="itemCount_label">
+               <widget class="QWidget" name="indicator_widget" native="true">
+                <property name="minimumSize">
+                 <size>
+                  <width>24</width>
+                  <height>24</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>24</width>
+                  <height>24</height>
+                 </size>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <spacer name="horizontalSpacer_37">
+                <property name="orientation">
+                 <enum>Qt::Orientation::Horizontal</enum>
+                </property>
+                <property name="sizeType">
+                 <enum>QSizePolicy::Policy::Fixed</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>50</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QLabel" name="item_count_label">
                 <property name="minimumSize">
                  <size>
                   <width>100</width>
@@ -220,17 +279,7 @@
                </widget>
               </item>
               <item>
-               <widget class="QLabel" name="status_label">
-                <property name="styleSheet">
-                 <string notr="true">background-color: rgba(255, 255, 255, 0);</string>
-                </property>
-                <property name="text">
-                 <string>offline</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QLabel" name="lastUpdate_label">
+               <widget class="QLabel" name="last_update_label">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
                   <horstretch>0</horstretch>
@@ -506,11 +555,20 @@
                 <verstretch>0</verstretch>
                </sizepolicy>
               </property>
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>16777211</height>
+               </size>
+              </property>
+              <property name="autoFillBackground">
+               <bool>false</bool>
+              </property>
               <property name="styleSheet">
                <string notr="true">background-color: rgba(255, 255, 255, 0);</string>
               </property>
               <property name="currentIndex">
-               <number>1</number>
+               <number>2</number>
               </property>
               <widget class="QWidget" name="config_page">
                <layout class="QVBoxLayout" name="verticalLayout_8">
