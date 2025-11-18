@@ -890,7 +890,7 @@ class MainWindow(QMainWindow):
                 time.sleep(1)
             db.close()
             print("DB repair complete")
-            worker.set_status_string("")
+            worker.setStatusString("")
             self.signals.inProgressItemComplete.emit(worker)
             
 
