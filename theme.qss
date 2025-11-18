@@ -27,6 +27,10 @@ QTableWidget#alert_list {
 #history_list {
 	background-color: #34373a;
 }
+QLineEdit{
+	color: #f5f5f5;
+}
+
 QPushButton{
 	color: #f5f5f5;
 	background-color: rgba(0, 0, 0, 0);
@@ -43,6 +47,16 @@ QRadioButton#status_indicator{
 QPushButton:checked{
 	color: #f5f5f5;
 	background-color: rgba(255, 255, 255, 10);
+	border-style:inset;
+	border-radius: 0px;
+	border-color: rgba(255, 255, 255, 40);
+	border-top-width: 1px;
+	border-bottom-width: 1px;
+	font: bold 14px;
+}
+QPushButton:disabled{
+	color: #000000;
+	background-color: rgba(0, 0, 0, 20);
 	border-style:inset;
 	border-radius: 0px;
 	border-color: rgba(255, 255, 255, 40);
