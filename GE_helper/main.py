@@ -12,13 +12,12 @@ from PyQt6.QtSql import *
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWebEngineWidgets import QWebEngineView
 from output import Ui_MainWindow
 from PyQt6.QtGui import QColor, QPainter, QBrush, QPen, QFontDatabase, QMouseEvent, QPaintEvent, QEnterEvent
 import numpy as np
-from datetime import datetime
 import weakref
 import threading
+import difflib
 
 #pyuic6 -o .\GE_helper\output.py .\GE_helper\newUI.ui
 
@@ -68,7 +67,6 @@ def textToInt(string):
                 raise ValueError
             
 class StatusIndicator(QWidget):
-    """Simple circular status light with tooltip support."""
     PRESETS = {
         "initializing": QColor("#FFFFFF"),
         "ok": QColor("#41e968"),
@@ -122,7 +120,6 @@ class StatusIndicator(QWidget):
         if tip:
             QToolTip.showText(self.mapToGlobal(self.rect().bottomLeft()), tip, self)
         super().enterEvent(event)
-
     def leaveEvent(self, event):
         QToolTip.hideText()
         super().leaveEvent(event)
@@ -345,7 +342,7 @@ class MainWindow(QMainWindow):
         self.ui.main_stack_widget.setCurrentIndex(1)
         self.ui.graph_button.setEnabled(True)
         self.ui.graph_button.setChecked(True)
-
+        self.setupSearch()
         self.ui.search_bar.setEnabled(True)
         alerts = []
         alerts.append(alert(2, "cobonal", "-50", "-20", "-40", "2000", "123992"))
@@ -375,6 +372,238 @@ class MainWindow(QMainWindow):
             self.threadpool.start(worker)
         except Exception as e:
             print(e)
+
+    def setupSearch(self, debounce_ms = 200):
+        try:
+            #timer for debounce while user is typing
+            self.search_debounce_ms = debounce_ms
+            self._search_timer = QTimer(self)
+            self._search_timer.setSingleShot(True)
+            #when timer expires offer suggestions in drop down
+            self._search_timer.timeout.connect(self._do_suggest)
+            
+            # completer + model
+            self._completer_model = QStringListModel(self)
+            self._completer = QCompleter(self._completer_model, self)
+            self._completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+            self._completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+            self._completer.activated.connect(self.on_completer_activated)
+
+            # allow substring matching (not only starts-with)
+            self._completer.setFilterMode(Qt.MatchFlag.MatchContains)
+            
+            # limit ammount of suggestions in drop down
+            try:
+                self._completer.setMaxVisibleItems(6)
+            except Exception:
+                pass
+
+            self.ui.search_bar.setCompleter(self._completer)
+            self.ui.search_bar.textEdited.connect(self.on_search_text_edited)
+            self.ui.search_bar.returnPressed.connect(self.on_search_entered)
+        except Exception as e:
+            print("setup_search failed:", e)
+
+    def on_search_text_edited(self, text: str):
+        # restart debounce timer
+        try:
+            self._last_search_text = text
+            self._search_timer.start(self.search_debounce_ms)
+        except Exception as e:
+            print("on_search_text_edited:", e)
+
+    def _do_suggest(self):
+        #after debounce timer expires offer search suggestions
+        try:
+            q = (self._last_search_text or "").strip()
+            if q == "":
+                self._completer_model.setStringList([])
+                # hide popup when empty
+                try:
+                    self._completer.popup().hide()
+                except Exception:
+                    pass
+                return
+            suggestions = self._get_suggestions(q, max_items=6)
+            # suggestions are "ID: name" strings
+            self._completer_model.setStringList(suggestions)
+            self._completer.setCompletionPrefix(q)
+
+            # adjust popup width to match the edit (optional)
+            try:
+                popup = self._completer.popup()
+                popup.setFixedWidth(max(self.ui.search_bar.width(), 200))
+            except Exception:
+                popup = None
+            # show popup explicitly if we have suggestions
+            if suggestions:
+                self._completer.complete()
+            else:
+                try:
+                    self._completer.popup().hide()
+                except Exception:
+                    pass
+            # show popup explicitly
+            self._completer.complete()
+        except Exception as e:
+            print("_do_suggest:", e)
+
+    def _get_suggestions(self, query: str, max_items: int = 6):
+        # return list of 'ID: name' suggestion strings.
+        # numeric queries match ID prefix
+        # non-numeric: substring matches first, then difflib fallback
+        try:
+            q = query.strip()
+            suggestions = []
+            items = getattr(self, "localList", [])
+            # numeric -> match id prefix or exact
+            if q.isdigit():
+                for id_, name in items:
+                    if id_.startswith(q):
+                        suggestions.append(f"{id_}: {name.replace('_',' ')}")
+                        if len(suggestions) >= max_items:
+                            return suggestions
+                return suggestions
+            ql = q.lower()
+            # substring matches (name contains)
+            for id_, name in items:
+                if ql in name.lower():
+                    suggestions.append(f"{id_}: {name.replace('_',' ')}")
+                    if len(suggestions) >= max_items:
+                        return suggestions
+            # fallback fuzzy match on names using difflib
+            #adjust cutoff to change how closely the results must match (higher cutoff = closer match)
+            names = [n for (_id, n) in items]
+            fuzzy = difflib.get_close_matches(query, names, n=max_items, cutoff=0.7)
+            # map fuzzy names back to ids and format
+            for fname in fuzzy:
+                for id_, name in items:
+                    if name == fname:
+                        s = f"{id_}: {name.replace('_',' ')}"
+                        if s not in suggestions:
+                            suggestions.append(s)
+                            break
+                if len(suggestions) >= max_items:
+                    break
+            return suggestions
+        except Exception as e:
+            print("_get_suggestions:", e)
+            return []
+
+    def on_completer_activated(self, text: str):
+        #user selected a suggestion from the popup. Perform final search
+        try:
+            # suggestion format is "ID: name"
+            id_part = text.split(":", 1)[0].strip()
+            self.perform_search(id_part)
+        except Exception as e:
+            print("on_completer_activated:", e)
+
+    def on_search_entered(self):
+        #user pressed enter in search bar: do final search
+        try:
+            text = self.ui.search_bar.text().strip()
+            if text == "":
+                return
+            # if text looks like "ID: name" extract id, else pass through
+            if ":" in text and text.split(":", 1)[0].strip().isdigit():
+                id_part = text.split(":", 1)[0].strip()
+                self.perform_search(id_part)
+            elif text.isdigit():
+                self.perform_search(text)
+            else:
+                # perform fuzzy/substring search and show results dialog
+                results = self._perform_query(text)
+                self.show_search_results(results, query=text)
+        except Exception as e:
+            print("on_search_entered:", e)
+
+    def _perform_query(self, query: str, max_results: int = 50):
+        # return list of (id, name) matching the query (ordered)
+        try:
+            q = query.strip()
+            items = getattr(self, "localList", [])
+            results = []
+            if q.isdigit():
+                for id_, name in items:
+                    if id_ == q:
+                        results.append((id_, name))
+                        return results
+                return results
+            ql = q.lower()
+            # prioritize substring matches
+            for id_, name in items:
+                if ql in name.lower():
+                    results.append((id_, name))
+                    if len(results) >= max_results:
+                        return results
+            # fallback fuzzy matches
+            names = [n for (_id, n) in items]
+            fuzzy = difflib.get_close_matches(query, names, n=max_results, cutoff=0.7)
+            for fname in fuzzy:
+                for id_, name in items:
+                    if name == fname and (id_, name) not in results:
+                        results.append((id_, name))
+                        break
+                if len(results) >= max_results:
+                    break
+            return results
+        except Exception as e:
+            print("_perform_query:", e)
+            return []
+
+    def show_search_results(self, results, query: str | None = None):
+        # show a simple modal results dialog with a list. double click selects item
+        try:
+            dlg = QDialog(self)
+            dlg.setWindowTitle(f"Search results{(' — ' + query) if query else ''}")
+            dlg.setModal(True)
+            dlg.setMinimumSize(420, 300)
+            layout = QVBoxLayout(dlg)
+            listw = QListWidget(dlg)
+            for id_, name in results:
+                listw.addItem(f"{id_}: {name.replace('_',' ')}")
+            layout.addWidget(listw)
+            btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+            btn_box.rejected.connect(dlg.reject)
+            layout.addWidget(btn_box)
+            # double-click => open graph for selected id
+            def on_item_activated(item):
+                try:
+                    text = item.text()
+                    id_part = text.split(":", 1)[0].strip()
+                    dlg.accept()
+                    self.perform_search(id_part)
+                except Exception as e:
+                    print("on_item_activated:", e)
+            listw.itemDoubleClicked.connect(on_item_activated)
+            dlg.exec()
+        except Exception as e:
+            print("show_search_results:", e)
+
+    def perform_search(self, id_str: str):
+        #Final action: show item details / graph for the id.
+        try:
+            # ensure id exists in localList
+            for id_, name in getattr(self, "localList", []):
+                if id_ == id_str:
+                    # switch UI to graph page and load item
+                    try:
+                        self.ui.search_bar.setText(f"{id_}: {name.replace('_',' ')}")
+                    except Exception:
+                        pass
+                    self.signals.newItem.emit(id_)
+                    # ensure graph page visible
+                    try:
+                        self.ui.main_stack_widget.setCurrentIndex(1)
+                    except Exception:
+                        pass
+                    return
+            # not found -> show results dialog with fuzzy suggestions
+            results = self._perform_query(id_str)
+            self.show_search_results(results, query=id_str)
+        except Exception as e:
+            print("perform_search:", e)
 
     def updateBar(self, progress):
         self.ui.progressBar.setValue(progress)
@@ -884,10 +1113,10 @@ class MainWindow(QMainWindow):
                         command = "INSERT OR IGNORE INTO " + tableName + "(timeStamp, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume) VALUES(?, ?, ?, ?, ?);"
                         cursor.execute(command, (timestamp, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume))
                         db.commit()
+                    time.sleep(1)
                 count = count + 1
                 worker.setStatusString("Updating price history: %d/%d" % (count, itemLen))
                 self.signals.newProgressUpdate.emit(worker)
-                time.sleep(1)
             db.close()
             print("DB repair complete")
             worker.setStatusString("")
