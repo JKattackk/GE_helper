@@ -18,6 +18,7 @@ import numpy as np
 import weakref
 import threading
 import difflib
+import datetime
 
 #pyuic6 -o .\GE_helper\output.py .\GE_helper\newUI.ui
 
@@ -138,7 +139,7 @@ class signals(QObject):
     #indicates new price update. Includes unix timestamp of last update
     newUpdate = pyqtSignal(int)
     #indicates new alerts.  
-    newAlerts = pyqtSignal(list)
+    newAlerts = pyqtSignal(list, int)
     newItem = pyqtSignal(str)
     graphReady = pyqtSignal(object)
     #GUI updating requests
@@ -230,7 +231,8 @@ class MainWindow(QMainWindow):
                 _ = self.ui.mainGraph.winId()
             except Exception:
                 pass
-
+            
+            self.setupAlertList()
             self.loopWorker = Worker(self.itemPriceLoop)
             self.signals = signals()
             self.setup_signals()
@@ -258,7 +260,7 @@ class MainWindow(QMainWindow):
                             tableName = "priceHistory5m.itemID" + item[0]
                             command = "SELECT timeStamp from " + tableName + " ORDER BY timeStamp DESC LIMIT 1"
                             lastEntryTime = int(cursor.execute(command).fetchone()[0])
-                            if (curTime - lastEntryTime) > 60*7:
+                            if (curTime - lastEntryTime) > 60*9:
                                 repairList[item[0]] = lastEntryTime
                         if len(repairList) > 0:
                             print(f"found ({len(repairList)}) items needing repair")
@@ -303,6 +305,11 @@ class MainWindow(QMainWindow):
         self.signals.newProgressUpdate.connect(self.updateStatus)
         self.signals.inProgressItemComplete.connect(self.removeInProgressItem)
 
+    def setupAlertList(self):
+        #minimumSectionSize : int
+        self.ui.alert_list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.ui.alert_list.hideColumn(6)
+        
     def addInProgressItem(self, worker):
         self.inProgressItems.append(worker)
         self.updateStatus()
@@ -344,9 +351,6 @@ class MainWindow(QMainWindow):
         self.ui.graph_button.setChecked(True)
         self.setupSearch()
         self.ui.search_bar.setEnabled(True)
-        alerts = []
-        alerts.append(alert(2, "cobonal", "-50", "-20", "-40", "2000", "123992"))
-        self.signals.newAlerts.emit(alerts)
         print("main window setup complete")
        
     def updateGraphPage(self, itemID):
@@ -622,15 +626,33 @@ class MainWindow(QMainWindow):
         else:
             self.ui.history_list.setVisible(False)
     
-    def updateAlerts(self, alerts):
+    def updateAlerts(self, alerts, updateTime):
         for alert in alerts:
             self.ui.alert_list.insertRow(0)
             self.ui.alert_list.setItem(0, 0, QTableWidgetItem(f"{alert.id}: {alert.name} "))
             self.ui.alert_list.setItem(0, 1, QTableWidgetItem(alert.highPriceChange))
             self.ui.alert_list.setItem(0, 2, QTableWidgetItem(alert.lowPriceChange))
-            self.ui.alert_list.setItem(0, 4, QTableWidgetItem(alert.highVolChange))
-            self.ui.alert_list.setItem(0, 5, QTableWidgetItem(alert.lowVolChange))
-            self.ui.alert_list.setItem(0, 7, QTableWidgetItem(alert.timestamp))
+            self.ui.alert_list.setItem(0, 3, QTableWidgetItem(alert.highVolChange))
+            self.ui.alert_list.setItem(0, 4, QTableWidgetItem(alert.lowVolChange))
+            self.ui.alert_list.setItem(0, 5, QTableWidgetItem(str(datetime.datetime.fromtimestamp(int(alert.timestamp)))))
+            self.ui.alert_list.setItem(0, 6, QTableWidgetItem(alert.timestamp))
+            for j in range(self.ui.alert_list.columnCount()):
+                    self.ui.alert_list.item(0, j).setForeground(QBrush(QColor(229, 137, 255)))
+        i = 0
+        while i < self.ui.alert_list.rowCount():
+            if int(self.ui.alert_list.item(i, 6).text()) != updateTime:
+                print("make it yellow or gray or something to show it's old")
+                for j in range(self.ui.alert_list.columnCount()):
+                    self.ui.alert_list.item(i, j).setForeground(QBrush(QColor(255, 254, 178)))
+                if updateTime - int(self.ui.alert_list.item(i, 6).text())  >= 8*60: # over 8 minutes old
+                    print("removing old alert")
+                    self.ui.alert_list.removeRow(i)
+                else:
+                    # i is only iterated when the row stays in the table to prevent indexing errors
+                    i = i+1
+            else:
+                # i is only iterated when the row stays in the table to prevent indexing errors
+                i = i+1
 
     def rebuildDBPressed(self):
         self.ui.splash_stacked.setCurrentIndex(1)
@@ -795,8 +817,8 @@ class MainWindow(QMainWindow):
                                     a = alert(id= str(id[0]), name = name, lowPriceChange = lowPriceChange, highPriceChange = highPriceChange, 
                                                   lowVolChange = lowVolChange, highVolChange = highVolChange, timestamp = lastUpdate)
                                     alerts.append(a)
-                                    print("?: low price ?%, high price ?%, low volume ?%, high volume ?%", (name, lowPriceChange, highPriceChange, lowVolChange, highVolChange))
-                self.signals.newAlerts.emit(alerts)
+                                    print(f"{name}: low price {lowPriceChange}%, high price {highPriceChange}%, low volume {lowVolChange}%, high volume {highVolChange}%, timeStamp {lastUpdate}")
+                self.signals.newAlerts.emit(alerts, lastUpdate)
                 database.commit()
                 database.close()
                 time.sleep(60)
@@ -1013,7 +1035,7 @@ class MainWindow(QMainWindow):
             else:
                 approx_bin_seconds = max(60, int(total_seconds / max_bins))
                 mins = max(1, approx_bin_seconds // 60)
-                vol_bins = f'{mins}T'
+                vol_bins = f'{mins}min'
 
             try:
                 vol_group = df.set_index('datetime').resample(vol_bins).sum()[['highVol','lowVol']].reset_index()

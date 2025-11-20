@@ -2126,6 +2126,9 @@
                <layout class="QHBoxLayout" name="horizontalLayout_36">
                 <item>
                  <widget class="QTableWidget" name="alert_list">
+                  <property name="focusPolicy">
+                   <enum>Qt::FocusPolicy::ClickFocus</enum>
+                  </property>
                   <property name="styleSheet">
                    <string notr="true"/>
                   </property>
@@ -2141,8 +2144,14 @@
                   <property name="showDropIndicator" stdset="0">
                    <bool>false</bool>
                   </property>
+                  <property name="dragDropOverwriteMode">
+                   <bool>false</bool>
+                  </property>
                   <property name="defaultDropAction">
                    <enum>Qt::DropAction::IgnoreAction</enum>
+                  </property>
+                  <property name="selectionMode">
+                   <enum>QAbstractItemView::SelectionMode::SingleSelection</enum>
                   </property>
                   <property name="showGrid">
                    <bool>false</bool>
@@ -2154,7 +2163,10 @@
                    <bool>false</bool>
                   </property>
                   <attribute name="horizontalHeaderVisible">
-                   <bool>false</bool>
+                   <bool>true</bool>
+                  </attribute>
+                  <attribute name="horizontalHeaderCascadingSectionResizes">
+                   <bool>true</bool>
                   </attribute>
                   <attribute name="horizontalHeaderHighlightSections">
                    <bool>false</bool>
@@ -2167,37 +2179,32 @@
                   </attribute>
                   <column>
                    <property name="text">
-                    <string>id: name</string>
+                    <string>ID:Name</string>
                    </property>
                   </column>
                   <column>
                    <property name="text">
-                    <string>highPrice</string>
+                    <string>High Price</string>
                    </property>
                   </column>
                   <column>
                    <property name="text">
-                    <string>New Column</string>
+                    <string>Low Price</string>
                    </property>
                   </column>
                   <column>
                    <property name="text">
-                    <string>sep1</string>
+                    <string>High Vol</string>
                    </property>
                   </column>
                   <column>
                    <property name="text">
-                    <string>lowPrice</string>
+                    <string>Low Vol</string>
                    </property>
                   </column>
                   <column>
                    <property name="text">
-                    <string>lowVol</string>
-                   </property>
-                  </column>
-                  <column>
-                   <property name="text">
-                    <string>sep2</string>
+                    <string>Time</string>
                    </property>
                   </column>
                   <column>

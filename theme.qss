@@ -31,6 +31,34 @@ QLineEdit{
 	color: #f5f5f5;
 }
 
+QScrollArea#alert_scroll_area{
+	background-color: rgba(0, 0, 0, 0);
+}
+QTableWidget#alert_list{
+	
+	background-color: #353741;
+	border: 1px solid #000d16;
+	gridline-color: rgba(255,255,255,10);
+	
+}
+QTableWidget::item{
+	background-color: #202127;
+	border: 1px solid #000d16;
+	gridline-color: rgba(255,255,255,10);;
+}
+QHeaderView{
+	color: #f5f5f5;
+	background-color: #131418;
+	border: 1px solid #000d16;
+	gridline-color: rgba(255,255,255,10);
+}
+QHeaderView::section{
+	color: #f5f5f5;
+	background-color: #131418;
+	border: 1px solid #000d16;
+	gridline-color: rgba(255,255,255,10);
+}
+
 QLineEdit#search_bar{
 	color: #f5f5f5;
 	background-color: rgba(255, 255, 255, 0.4);
