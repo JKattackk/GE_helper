@@ -783,85 +783,86 @@ class MainWindow(QMainWindow):
                 alerts = []
                 url = "https://prices.runescape.wiki/api/v1/osrs/5m"
                 response = json.loads(requests.get(url, headers = headers).text)
-                lastUpdate = response.get('timestamp')
-                print(lastUpdate)
-                trackedIDs = cursor.execute('SELECT id from filteredDB WHERE tracked=TRUE').fetchall()
-                try:
-                    with open(alertConfigFile, "r") as f:
-                        alertConfig = json.load(f)
-                        print("Using alert config")
-                        print(alertConfig)
-                        minLowPriceChange = alertConfig.get("minLowPriceChange")
-                        minHighPriceChange = alertConfig.get("minHighPriceChange")
-                        minLowVolChange = alertConfig.get("minLowVolChange")
-                        minHighVolChange = alertConfig.get("minHighVolChange")
-                        onlyHighDrops = alertConfig.get("onlyHighDrops")
-                except:
-                    print("no alert config exists.  Using default values")
-                    minLowPriceChange = def_priceChangePercent
-                    minHighPriceChange = def_priceChangePercent
-                    minLowVolChange = def_volChangePercent
-                    minHighVolChange = def_volChangePercent
-                    onlyHighDrops = False
-                if onlyHighDrops:
-                    # -200% drop is not possible
-                    minLowPriceChange = 200
-                for id in trackedIDs:
-                    id_str = ''.join(str(value) for value in id)
-                    command = "SELECT name FROM priceHistory5m.sqlite_master WHERE type='table' AND name='itemID" + id_str + "';"
-                    query = cursor.execute(command)
-                    if not query.fetchone() == None:
-                        if (not response.get('data').get(id_str) == None):
-                            tableName = "priceHistory5m.itemID" + id_str
-                            command = "SELECT timeStamp from " + tableName + " ORDER BY timeStamp DESC LIMIT 1"
-                            try:
-                                lastEntryTime = int(cursor.execute(command).fetchone()[0])
-                            except:
-                                lastEntryTime = 0
-                            if not lastEntryTime == lastUpdate:
-                                avgLowPrice = response.get('data').get(id_str).get('avgLowPrice')
-                                avgHighPrice = response.get('data').get(id_str).get('avgHighPrice')
-                                lowPriceVolume = response.get('data').get(id_str).get('lowPriceVolume')
-                                highPriceVolume = response.get('data').get(id_str).get('highPriceVolume')
-                                command = "INSERT OR IGNORE INTO " + tableName + "(timeStamp, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume) VALUES(?, ?, ?, ?, ?);"
-                                cursor.execute(command, (lastUpdate, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume))
-                                
-                                 ##  price and volume change metrics, alerts.
-                                oneDayAvg = self.getOneDayAvg(database, tableName, lastUpdate)
+                if response.get('timestamp') > lastUpdate:
+                    lastUpdate = response.get('timestamp')
+                    print(lastUpdate)
+                    trackedIDs = cursor.execute('SELECT id from filteredDB WHERE tracked=TRUE').fetchall()
+                    try:
+                        with open(alertConfigFile, "r") as f:
+                            alertConfig = json.load(f)
+                            print("Using alert config")
+                            print(alertConfig)
+                            minLowPriceChange = alertConfig.get("minLowPriceChange")
+                            minHighPriceChange = alertConfig.get("minHighPriceChange")
+                            minLowVolChange = alertConfig.get("minLowVolChange")
+                            minHighVolChange = alertConfig.get("minHighVolChange")
+                            onlyHighDrops = alertConfig.get("onlyHighDrops")
+                    except:
+                        print("no alert config exists.  Using default values")
+                        minLowPriceChange = def_priceChangePercent
+                        minHighPriceChange = def_priceChangePercent
+                        minLowVolChange = def_volChangePercent
+                        minHighVolChange = def_volChangePercent
+                        onlyHighDrops = False
+                    if onlyHighDrops:
+                        # -200% drop is not possible
+                        minLowPriceChange = 200
+                    for id in trackedIDs:
+                        id_str = ''.join(str(value) for value in id)
+                        command = "SELECT name FROM priceHistory5m.sqlite_master WHERE type='table' AND name='itemID" + id_str + "';"
+                        query = cursor.execute(command)
+                        if not query.fetchone() == None:
+                            if (not response.get('data').get(id_str) == None):
+                                tableName = "priceHistory5m.itemID" + id_str
+                                command = "SELECT timeStamp from " + tableName + " ORDER BY timeStamp DESC LIMIT 1"
                                 try:
-                                    lowPriceChange = (avgLowPrice / oneDayAvg.get("avgLowPrice"))*100 - 100
+                                    lastEntryTime = int(cursor.execute(command).fetchone()[0])
                                 except:
-                                    lowPriceChange = 0
-                                try:
-                                    highPriceChange = (avgHighPrice / oneDayAvg.get("avgHighPrice"))*100 - 100
-                                except:
-                                    highPriceChange = 0
-                                try:
-                                    lowVolChange = (lowPriceVolume / oneDayAvg.get("avgLowVol"))*100 - 100
-                                except:
-                                    lowVolChange = 0
-                                try:
-                                    highVolChange = (highPriceVolume / oneDayAvg.get("avgHighVol"))*100 - 100
-                                except:
-                                    highVolChange = 0
-                                command = "UPDATE filteredDB set lowPrice = ?, highPrice = ?, lowVolume = ?, highVolume = ?, lowPriceChange = ?, highPriceChange = ?, lowVolumeChange = ?, highVolumeChange = ? WHERE id = ?"
-                                cursor.execute(command, (avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume, lowPriceChange, highPriceChange, lowVolChange, highVolChange, id[0]))
-                                if (lowPriceChange <= -abs(minLowPriceChange) or highPriceChange <= -abs(minHighPriceChange)) and (lowVolChange >= minLowVolChange or highVolChange >= minHighVolChange):
-                                    command = "SELECT itemName FROM filteredDB WHERE id = ?"
-                                    name = cursor.execute(command, id).fetchone()[0]
-                                    a = alert(id= str(id[0]), name = name, lowPriceChange = lowPriceChange, highPriceChange = highPriceChange, 
-                                                  lowVolChange = lowVolChange, highVolChange = highVolChange, timestamp = lastUpdate)
-                                    alerts.append(a)
-                                    print(f"{name}: low price {lowPriceChange}%, high price {highPriceChange}%, low volume {lowVolChange}%, high volume {highVolChange}%, timeStamp {lastUpdate}")
-                self.signals.newAlerts.emit(alerts, lastUpdate)
-                database.commit()
-                database.close()
-                timeSinceUpdate = time.time() - lastUpdate
-                if timeSinceUpdate < 250:
-                    time.sleep(250 - timeSinceUpdate)
-                else:
-                    print(f"time since last update: {timeSinceUpdate}")
-                    time.sleep(60)
+                                    lastEntryTime = 0
+                                if not lastEntryTime == lastUpdate:
+                                    avgLowPrice = response.get('data').get(id_str).get('avgLowPrice')
+                                    avgHighPrice = response.get('data').get(id_str).get('avgHighPrice')
+                                    lowPriceVolume = response.get('data').get(id_str).get('lowPriceVolume')
+                                    highPriceVolume = response.get('data').get(id_str).get('highPriceVolume')
+                                    command = "INSERT OR IGNORE INTO " + tableName + "(timeStamp, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume) VALUES(?, ?, ?, ?, ?);"
+                                    cursor.execute(command, (lastUpdate, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume))
+                                    
+                                    ##  price and volume change metrics, alerts.
+                                    oneDayAvg = self.getOneDayAvg(database, tableName, lastUpdate)
+                                    try:
+                                        lowPriceChange = (avgLowPrice / oneDayAvg.get("avgLowPrice"))*100 - 100
+                                    except:
+                                        lowPriceChange = 0
+                                    try:
+                                        highPriceChange = (avgHighPrice / oneDayAvg.get("avgHighPrice"))*100 - 100
+                                    except:
+                                        highPriceChange = 0
+                                    try:
+                                        lowVolChange = (lowPriceVolume / oneDayAvg.get("avgLowVol"))*100 - 100
+                                    except:
+                                        lowVolChange = 0
+                                    try:
+                                        highVolChange = (highPriceVolume / oneDayAvg.get("avgHighVol"))*100 - 100
+                                    except:
+                                        highVolChange = 0
+                                    command = "UPDATE filteredDB set lowPrice = ?, highPrice = ?, lowVolume = ?, highVolume = ?, lowPriceChange = ?, highPriceChange = ?, lowVolumeChange = ?, highVolumeChange = ? WHERE id = ?"
+                                    cursor.execute(command, (avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume, lowPriceChange, highPriceChange, lowVolChange, highVolChange, id[0]))
+                                    if (lowPriceChange <= -abs(minLowPriceChange) or highPriceChange <= -abs(minHighPriceChange)) and (lowVolChange >= minLowVolChange or highVolChange >= minHighVolChange):
+                                        command = "SELECT itemName FROM filteredDB WHERE id = ?"
+                                        name = cursor.execute(command, id).fetchone()[0]
+                                        a = alert(id= str(id[0]), name = name, lowPriceChange = lowPriceChange, highPriceChange = highPriceChange, 
+                                                    lowVolChange = lowVolChange, highVolChange = highVolChange, timestamp = lastUpdate)
+                                        alerts.append(a)
+                                        print(f"{name}: low price {lowPriceChange}%, high price {highPriceChange}%, low volume {lowVolChange}%, high volume {highVolChange}%, timeStamp {lastUpdate}")
+                    self.signals.newAlerts.emit(alerts, lastUpdate)
+                    database.commit()
+                    database.close()
+                    timeSinceUpdate = time.time() - lastUpdate
+                    if timeSinceUpdate < 250:
+                        time.sleep(250 - timeSinceUpdate)
+                    else:
+                        print(f"time since last update: {timeSinceUpdate}")
+                        time.sleep(60)
             time.sleep(1)
 
     def buildDB(self, worker = None):
