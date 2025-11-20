@@ -1,1 +1,1 @@
-{"minLowPriceChange": 30, "minHighPriceChange": 20, "minLowVolChange": 200, "minHighVolChange": 200, "onlyHighDrops": false}
+{"minLowPriceChange": 20, "minHighPriceChange": 20, "minLowVolChange": 500, "minHighVolChange": 200, "onlyHighDrops": false}

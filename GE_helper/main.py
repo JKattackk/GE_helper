@@ -56,14 +56,19 @@ def textToInt(string):
     except:
         endChar = string[-1].casefold()
         string = string[:-1]
-        num = int(string)
+        try:
+            num = int(string)
+        except Exception as e:
+            print("invalid input: ")
+            print(e)
+            raise ValueError
         match endChar:
             case 'm':
-                num = num * 10^6
+                return(num * 10**6)
             case 'k':
-                num = num * 10^3
+                return(num * 10**3)
             case 'b':
-                num = num * 10^9
+                return(num * 10**9)
             case default:
                 raise ValueError
             
