@@ -148,6 +148,7 @@ class signals(QObject):
     buildDBComplete = pyqtSignal()
     priceHistoryComplete = pyqtSignal()
     killPriceLoop = pyqtSignal()
+    alertConfigSaved = pyqtSignal()
 
     newInProgressItem = pyqtSignal(object)
     newProgressUpdate = pyqtSignal(object)
@@ -238,9 +239,9 @@ class MainWindow(QMainWindow):
             self.setup_signals()
 
             self.ui.history_list.setVisible(False)
-            
-            #graph page setup
             self.updateConfigBoxes()
+
+            #graph page setup
             self.ui.main_stack_widget.setCurrentIndex(0)
 
             #confirm that database exists and build has been finished
@@ -289,6 +290,7 @@ class MainWindow(QMainWindow):
         self.ui.history_button.toggled['bool'].connect(self.onHistoryButtonToggle)
         self.ui.config_button.clicked.connect(self.onConfigButtonToggle)
         self.ui.graph_button.clicked.connect(self.onGraphButtonToggle)
+        self.ui.save_alert_button.clicked.connect(self.saveAlertConfig)
 
         #loading screen control
         self.signals.progBarChange.connect(self.updateBar)
@@ -300,6 +302,7 @@ class MainWindow(QMainWindow):
         self.signals.newItem.connect(self.newItem)
         self.signals.graphReady.connect(self.updatePlot)
         self.signals.newAlerts.connect(self.updateAlerts)
+        self.signals.alertConfigSaved.connect(self.updateConfigBoxes)
 
         self.signals.newInProgressItem.connect(self.addInProgressItem)
         self.signals.newProgressUpdate.connect(self.updateStatus)
@@ -615,10 +618,8 @@ class MainWindow(QMainWindow):
         self.ui.loading_label.setText(text)
     def onGraphButtonToggle(self):
         self.ui.main_stack_widget.setCurrentIndex(1)
-        print("test")
     def onConfigButtonToggle(self):
-        worker = Worker(self.updateConfigBoxes)
-        self.threadpool.start(worker)
+        self.updateConfigBoxes()
         self.ui.main_stack_widget.setCurrentIndex(0)
     def onHistoryButtonToggle(self, state):
         if state:
@@ -679,24 +680,38 @@ class MainWindow(QMainWindow):
         self.ui.mhv_line.setPlaceholderText(str(minHourlyVolume))
         self.ui.mp_line.setPlaceholderText(str(maxPrice))
 
+        self.ui.mblv_line.clear()
+        self.ui.mhvt_line.clear()
+        self.ui.mhv_line.clear()
+        self.ui.mp_line.clear()
+        
         try:
             with open(alertConfigFile, "r") as f:
-                    alertConfig = json.load(f)
-                    minLowPriceChange = alertConfig.get("minLowPriceChange")
-                    minHighPriceChange = alertConfig.get("minHighPriceChange")
-                    minLowVolChange = alertConfig.get("minLowVolChange")
-                    minHighVolChange = alertConfig.get("minHighVolChange")
-        except:
+                alertConfig = json.load(f)
+                minLowPriceChange = alertConfig.get("minLowPriceChange")
+                minHighPriceChange = alertConfig.get("minHighPriceChange")
+                minLowVolChange = alertConfig.get("minLowVolChange")
+                minHighVolChange = alertConfig.get("minHighVolChange")
+                onlyHighDrops = alertConfig.get("onlyHighDrops")
+        except Exception as e:
             print("no alert config exists.  Using default values")
+            print(e)
             minLowPriceChange = def_priceChangePercent
             minHighPriceChange = def_priceChangePercent
             minLowVolChange = def_volChangePercent
             minHighVolChange = def_volChangePercent
+            onlyHighDrops = False
         
         self.ui.mlpc_line.setPlaceholderText(str(minLowPriceChange))
         self.ui.mhpc_line.setPlaceholderText(str(minHighPriceChange))
         self.ui.mlvc_line.setPlaceholderText(str(minLowVolChange))
-        self.ui.mhvc_line.setPlaceholderText(str(minHighVolChange))  
+        self.ui.mhvc_line.setPlaceholderText(str(minHighVolChange))
+        self.ui.mlpc_line.clear()
+        self.ui.mhpc_line.clear()
+        self.ui.mlvc_line.clear()
+        self.ui.mhvc_line.clear()
+
+        self.ui.high_price_drop_check.setChecked(onlyHighDrops)
 
     def buildPriceHistoryDB(self, worker = None):
         print("price history build starting...")
@@ -761,7 +776,7 @@ class MainWindow(QMainWindow):
         while True:
             if worker.is_killed:
                 break
-            if (int(time.time()) - int(lastUpdate)) > 510:
+            if (int(time.time()) - int(lastUpdate)) > 305:
                 database = sqlite3.connect('database.db')
                 cursor = database.cursor()
                 cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
@@ -771,6 +786,26 @@ class MainWindow(QMainWindow):
                 lastUpdate = response.get('timestamp')
                 print(lastUpdate)
                 trackedIDs = cursor.execute('SELECT id from filteredDB WHERE tracked=TRUE').fetchall()
+                try:
+                    with open(alertConfigFile, "r") as f:
+                        alertConfig = json.load(f)
+                        print("Using alert config")
+                        print(alertConfig)
+                        minLowPriceChange = alertConfig.get("minLowPriceChange")
+                        minHighPriceChange = alertConfig.get("minHighPriceChange")
+                        minLowVolChange = alertConfig.get("minLowVolChange")
+                        minHighVolChange = alertConfig.get("minHighVolChange")
+                        onlyHighDrops = alertConfig.get("onlyHighDrops")
+                except:
+                    print("no alert config exists.  Using default values")
+                    minLowPriceChange = def_priceChangePercent
+                    minHighPriceChange = def_priceChangePercent
+                    minLowVolChange = def_volChangePercent
+                    minHighVolChange = def_volChangePercent
+                    onlyHighDrops = False
+                if onlyHighDrops:
+                    # -200% drop is not possible
+                    minLowPriceChange = 200
                 for id in trackedIDs:
                     id_str = ''.join(str(value) for value in id)
                     command = "SELECT name FROM priceHistory5m.sqlite_master WHERE type='table' AND name='itemID" + id_str + "';"
@@ -811,7 +846,7 @@ class MainWindow(QMainWindow):
                                     highVolChange = 0
                                 command = "UPDATE filteredDB set lowPrice = ?, highPrice = ?, lowVolume = ?, highVolume = ?, lowPriceChange = ?, highPriceChange = ?, lowVolumeChange = ?, highVolumeChange = ? WHERE id = ?"
                                 cursor.execute(command, (avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume, lowPriceChange, highPriceChange, lowVolChange, highVolChange, id[0]))
-                                if (abs(lowPriceChange) >= def_priceChangePercent or abs(highPriceChange) >= def_priceChangePercent) and (lowVolChange >= def_volChangePercent or highVolChange >= def_volChangePercent):
+                                if (lowPriceChange <= -abs(minLowPriceChange) or highPriceChange <= -abs(minHighPriceChange)) and (lowVolChange >= minLowVolChange or highVolChange >= minHighVolChange):
                                     command = "SELECT itemName FROM filteredDB WHERE id = ?"
                                     name = cursor.execute(command, id).fetchone()[0]
                                     a = alert(id= str(id[0]), name = name, lowPriceChange = lowPriceChange, highPriceChange = highPriceChange, 
@@ -821,7 +856,13 @@ class MainWindow(QMainWindow):
                 self.signals.newAlerts.emit(alerts, lastUpdate)
                 database.commit()
                 database.close()
-                time.sleep(60)
+                timeSinceUpdate = time.time() - lastUpdate
+                if timeSinceUpdate < 250:
+                    time.sleep(250 - timeSinceUpdate)
+                else:
+                    print(f"time since last update: {timeSinceUpdate}")
+                    time.sleep(60)
+            time.sleep(1)
 
     def buildDB(self, worker = None):
         print("buildDB starting...")
@@ -931,6 +972,43 @@ class MainWindow(QMainWindow):
             import traceback
             traceback.print_exc()
 
+    def saveAlertConfig(self, worker = None):
+        if self.ui.mlpc_line.text() == '':
+            minLowPriceChange = self.ui.mlpc_line.placeholderText()
+        else:
+            minLowPriceChange = self.ui.mlpc_line.text()
+        if self.ui.mhpc_line.text() == '':
+            minHighPriceChange = self.ui.mhpc_line.placeholderText()
+        else:
+            minHighPriceChange = self.ui.mhpc_line.text()
+        if self.ui.mlvc_line.text() == '':
+            minLowVolChange = self.ui.mlvc_line.placeholderText()
+        else:
+            minLowVolChange = self.ui.mlvc_line.text()
+        if self.ui.mhvc_line.text() == '':
+            minHighVolChange = self.ui.mhvc_line.placeholderText()
+        else:
+            minHighVolChange = self.ui.mhvc_line.text()
+        
+        onlyHighDrops = self.ui.high_price_drop_check.isChecked()
+        
+        try:
+            minLowPriceChange = textToInt(minLowPriceChange)
+            minHighPriceChange = textToInt(minHighPriceChange)
+            minLowVolChange = textToInt(minLowVolChange)
+            minHighVolChange = textToInt(minHighVolChange)
+        except Exception as e:
+            print("invalid input: ")
+            print(e)
+            return False
+        
+        alertConfig = {"minLowPriceChange": minLowPriceChange, "minHighPriceChange": minHighPriceChange, "minLowVolChange": minLowVolChange, "minHighVolChange": minHighVolChange, "onlyHighDrops": onlyHighDrops}
+        
+        with open(alertConfigFile, "w") as f:
+            json.dump(alertConfig, f)
+            print("alert config saved")
+        self.signals.alertConfigSaved.emit()
+    
     def updateLocalList(self):
         try:
             database = sqlite3.connect('database.db')

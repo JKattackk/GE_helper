@@ -568,7 +568,7 @@
                <string notr="true">background-color: rgba(255, 255, 255, 0);</string>
               </property>
               <property name="currentIndex">
-               <number>6</number>
+               <number>0</number>
               </property>
               <widget class="QWidget" name="config_page">
                <layout class="QVBoxLayout" name="verticalLayout_8">
@@ -604,250 +604,252 @@
                    </spacer>
                   </item>
                   <item>
-                   <layout class="QVBoxLayout" name="verticalLayout_7">
-                    <item>
-                     <widget class="QLabel" name="label_12">
-                      <property name="text">
-                       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:12pt;&quot;&gt;Filter settings&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <layout class="QVBoxLayout" name="verticalLayout_4">
-                      <item>
-                       <layout class="QGridLayout" name="gridLayout_2">
-                        <item row="2" column="2">
-                         <layout class="QHBoxLayout" name="horizontalLayout_5">
-                          <item>
-                           <widget class="QLabel" name="label_4">
-                            <property name="minimumSize">
-                             <size>
-                              <width>160</width>
-                              <height>32</height>
-                             </size>
-                            </property>
-                            <property name="text">
-                             <string>min hourly volume</string>
-                            </property>
-                           </widget>
-                          </item>
-                          <item>
-                           <widget class="QLineEdit" name="mhv_line">
-                            <property name="minimumSize">
-                             <size>
-                              <width>180</width>
-                              <height>0</height>
-                             </size>
-                            </property>
-                           </widget>
-                          </item>
-                         </layout>
-                        </item>
-                        <item row="2" column="1">
-                         <spacer name="horizontalSpacer_4">
-                          <property name="orientation">
-                           <enum>Qt::Orientation::Horizontal</enum>
-                          </property>
-                          <property name="sizeType">
-                           <enum>QSizePolicy::Policy::Expanding</enum>
-                          </property>
-                          <property name="sizeHint" stdset="0">
-                           <size>
-                            <width>40</width>
-                            <height>20</height>
-                           </size>
-                          </property>
-                         </spacer>
-                        </item>
-                        <item row="0" column="0">
-                         <layout class="QHBoxLayout" name="horizontalLayout_2">
-                          <item>
-                           <widget class="QLabel" name="label">
-                            <property name="minimumSize">
-                             <size>
-                              <width>160</width>
-                              <height>32</height>
-                             </size>
-                            </property>
-                            <property name="text">
-                             <string>min buy limit value</string>
-                            </property>
-                           </widget>
-                          </item>
-                          <item>
-                           <widget class="QLineEdit" name="mblv_line">
-                            <property name="minimumSize">
-                             <size>
-                              <width>180</width>
-                              <height>0</height>
-                             </size>
-                            </property>
-                            <property name="clearButtonEnabled">
-                             <bool>false</bool>
-                            </property>
-                           </widget>
-                          </item>
-                         </layout>
-                        </item>
-                        <item row="0" column="2">
-                         <layout class="QHBoxLayout" name="horizontalLayout_4">
-                          <item>
-                           <widget class="QLabel" name="label_3">
-                            <property name="minimumSize">
-                             <size>
-                              <width>160</width>
-                              <height>32</height>
-                             </size>
-                            </property>
-                            <property name="text">
-                             <string>max price</string>
-                            </property>
-                           </widget>
-                          </item>
-                          <item>
-                           <widget class="QLineEdit" name="mp_line">
-                            <property name="minimumSize">
-                             <size>
-                              <width>180</width>
-                              <height>0</height>
-                             </size>
-                            </property>
-                           </widget>
-                          </item>
-                         </layout>
-                        </item>
-                        <item row="2" column="0">
-                         <layout class="QHBoxLayout" name="horizontalLayout_3">
-                          <item>
-                           <widget class="QLabel" name="label_2">
-                            <property name="minimumSize">
-                             <size>
-                              <width>160</width>
-                              <height>32</height>
-                             </size>
-                            </property>
-                            <property name="text">
-                             <string>min hourly value throughput</string>
-                            </property>
-                           </widget>
-                          </item>
-                          <item>
-                           <widget class="QLineEdit" name="mhvt_line">
-                            <property name="minimumSize">
-                             <size>
-                              <width>180</width>
-                              <height>0</height>
-                             </size>
-                            </property>
-                           </widget>
-                          </item>
-                         </layout>
-                        </item>
-                        <item row="3" column="1">
-                         <spacer name="verticalSpacer_4">
-                          <property name="orientation">
-                           <enum>Qt::Orientation::Vertical</enum>
-                          </property>
-                          <property name="sizeType">
-                           <enum>QSizePolicy::Policy::Fixed</enum>
-                          </property>
-                          <property name="sizeHint" stdset="0">
-                           <size>
-                            <width>20</width>
-                            <height>20</height>
-                           </size>
-                          </property>
-                         </spacer>
-                        </item>
-                        <item row="0" column="1">
-                         <spacer name="horizontalSpacer_3">
-                          <property name="orientation">
-                           <enum>Qt::Orientation::Horizontal</enum>
-                          </property>
-                          <property name="sizeHint" stdset="0">
-                           <size>
-                            <width>40</width>
-                            <height>20</height>
-                           </size>
-                          </property>
-                         </spacer>
-                        </item>
-                        <item row="1" column="0">
-                         <spacer name="verticalSpacer_5">
-                          <property name="orientation">
-                           <enum>Qt::Orientation::Vertical</enum>
-                          </property>
-                          <property name="sizeType">
-                           <enum>QSizePolicy::Policy::Fixed</enum>
-                          </property>
-                          <property name="sizeHint" stdset="0">
-                           <size>
-                            <width>20</width>
-                            <height>5</height>
-                           </size>
-                          </property>
-                         </spacer>
-                        </item>
-                       </layout>
-                      </item>
-                      <item>
-                       <layout class="QHBoxLayout" name="horizontalLayout_8">
-                        <item>
-                         <layout class="QVBoxLayout" name="verticalLayout_2">
-                          <item>
-                           <layout class="QHBoxLayout" name="horizontalLayout_6">
-                            <item>
-                             <widget class="QPushButton" name="rebuild_db_button">
-                              <property name="minimumSize">
-                               <size>
-                                <width>100</width>
-                                <height>32</height>
-                               </size>
-                              </property>
-                              <property name="text">
-                               <string>Rebuild Database</string>
-                              </property>
-                             </widget>
-                            </item>
-                            <item>
-                             <widget class="QLabel" name="label_10">
-                              <property name="text">
-                               <string>A</string>
-                              </property>
-                             </widget>
-                            </item>
-                            <item>
-                             <widget class="QLabel" name="label_9">
-                              <property name="text">
-                               <string>Price history will be deleted and rebuilt with new settings.  Will take a while to complete.</string>
-                              </property>
-                             </widget>
-                            </item>
-                           </layout>
-                          </item>
-                         </layout>
-                        </item>
-                        <item>
-                         <spacer name="horizontalSpacer_6">
-                          <property name="orientation">
-                           <enum>Qt::Orientation::Horizontal</enum>
-                          </property>
-                          <property name="sizeHint" stdset="0">
-                           <size>
-                            <width>40</width>
-                            <height>20</height>
-                           </size>
-                          </property>
-                         </spacer>
-                        </item>
-                       </layout>
-                      </item>
-                     </layout>
-                    </item>
-                    <item>
-                     <layout class="QHBoxLayout" name="horizontalLayout_7"/>
-                    </item>
-                   </layout>
+                   <widget class="QFrame" name="filter_config_frame">
+                    <layout class="QVBoxLayout" name="verticalLayout_7">
+                     <item>
+                      <widget class="QLabel" name="filter_config_label">
+                       <property name="text">
+                        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:12pt;&quot;&gt;Filter settings&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item>
+                      <layout class="QVBoxLayout" name="verticalLayout_4">
+                       <item>
+                        <layout class="QGridLayout" name="gridLayout_2">
+                         <item row="2" column="2">
+                          <layout class="QHBoxLayout" name="horizontalLayout_5">
+                           <item>
+                            <widget class="QLabel" name="label_4">
+                             <property name="minimumSize">
+                              <size>
+                               <width>160</width>
+                               <height>32</height>
+                              </size>
+                             </property>
+                             <property name="text">
+                              <string>min hourly volume</string>
+                             </property>
+                            </widget>
+                           </item>
+                           <item>
+                            <widget class="QLineEdit" name="mhv_line">
+                             <property name="minimumSize">
+                              <size>
+                               <width>180</width>
+                               <height>0</height>
+                              </size>
+                             </property>
+                            </widget>
+                           </item>
+                          </layout>
+                         </item>
+                         <item row="2" column="1">
+                          <spacer name="horizontalSpacer_4">
+                           <property name="orientation">
+                            <enum>Qt::Orientation::Horizontal</enum>
+                           </property>
+                           <property name="sizeType">
+                            <enum>QSizePolicy::Policy::Expanding</enum>
+                           </property>
+                           <property name="sizeHint" stdset="0">
+                            <size>
+                             <width>40</width>
+                             <height>20</height>
+                            </size>
+                           </property>
+                          </spacer>
+                         </item>
+                         <item row="0" column="0">
+                          <layout class="QHBoxLayout" name="horizontalLayout_2">
+                           <item>
+                            <widget class="QLabel" name="label">
+                             <property name="minimumSize">
+                              <size>
+                               <width>160</width>
+                               <height>32</height>
+                              </size>
+                             </property>
+                             <property name="text">
+                              <string>min buy limit value</string>
+                             </property>
+                            </widget>
+                           </item>
+                           <item>
+                            <widget class="QLineEdit" name="mblv_line">
+                             <property name="minimumSize">
+                              <size>
+                               <width>180</width>
+                               <height>0</height>
+                              </size>
+                             </property>
+                             <property name="clearButtonEnabled">
+                              <bool>false</bool>
+                             </property>
+                            </widget>
+                           </item>
+                          </layout>
+                         </item>
+                         <item row="0" column="2">
+                          <layout class="QHBoxLayout" name="horizontalLayout_4">
+                           <item>
+                            <widget class="QLabel" name="label_3">
+                             <property name="minimumSize">
+                              <size>
+                               <width>160</width>
+                               <height>32</height>
+                              </size>
+                             </property>
+                             <property name="text">
+                              <string>max price</string>
+                             </property>
+                            </widget>
+                           </item>
+                           <item>
+                            <widget class="QLineEdit" name="mp_line">
+                             <property name="minimumSize">
+                              <size>
+                               <width>180</width>
+                               <height>0</height>
+                              </size>
+                             </property>
+                            </widget>
+                           </item>
+                          </layout>
+                         </item>
+                         <item row="2" column="0">
+                          <layout class="QHBoxLayout" name="horizontalLayout_3">
+                           <item>
+                            <widget class="QLabel" name="label_2">
+                             <property name="minimumSize">
+                              <size>
+                               <width>160</width>
+                               <height>32</height>
+                              </size>
+                             </property>
+                             <property name="text">
+                              <string>min hourly value throughput</string>
+                             </property>
+                            </widget>
+                           </item>
+                           <item>
+                            <widget class="QLineEdit" name="mhvt_line">
+                             <property name="minimumSize">
+                              <size>
+                               <width>180</width>
+                               <height>0</height>
+                              </size>
+                             </property>
+                            </widget>
+                           </item>
+                          </layout>
+                         </item>
+                         <item row="3" column="1">
+                          <spacer name="verticalSpacer_4">
+                           <property name="orientation">
+                            <enum>Qt::Orientation::Vertical</enum>
+                           </property>
+                           <property name="sizeType">
+                            <enum>QSizePolicy::Policy::Fixed</enum>
+                           </property>
+                           <property name="sizeHint" stdset="0">
+                            <size>
+                             <width>20</width>
+                             <height>20</height>
+                            </size>
+                           </property>
+                          </spacer>
+                         </item>
+                         <item row="0" column="1">
+                          <spacer name="horizontalSpacer_3">
+                           <property name="orientation">
+                            <enum>Qt::Orientation::Horizontal</enum>
+                           </property>
+                           <property name="sizeHint" stdset="0">
+                            <size>
+                             <width>40</width>
+                             <height>20</height>
+                            </size>
+                           </property>
+                          </spacer>
+                         </item>
+                         <item row="1" column="0">
+                          <spacer name="verticalSpacer_5">
+                           <property name="orientation">
+                            <enum>Qt::Orientation::Vertical</enum>
+                           </property>
+                           <property name="sizeType">
+                            <enum>QSizePolicy::Policy::Fixed</enum>
+                           </property>
+                           <property name="sizeHint" stdset="0">
+                            <size>
+                             <width>20</width>
+                             <height>5</height>
+                            </size>
+                           </property>
+                          </spacer>
+                         </item>
+                        </layout>
+                       </item>
+                       <item>
+                        <layout class="QHBoxLayout" name="horizontalLayout_8">
+                         <item>
+                          <layout class="QVBoxLayout" name="verticalLayout_2">
+                           <item>
+                            <layout class="QHBoxLayout" name="horizontalLayout_6">
+                             <item>
+                              <widget class="QPushButton" name="rebuild_db_button">
+                               <property name="minimumSize">
+                                <size>
+                                 <width>100</width>
+                                 <height>32</height>
+                                </size>
+                               </property>
+                               <property name="text">
+                                <string>Rebuild Database</string>
+                               </property>
+                              </widget>
+                             </item>
+                             <item>
+                              <widget class="QLabel" name="label_10">
+                               <property name="text">
+                                <string>A</string>
+                               </property>
+                              </widget>
+                             </item>
+                             <item>
+                              <widget class="QLabel" name="label_9">
+                               <property name="text">
+                                <string>Price history will be deleted and rebuilt with new settings.  Will take a while to complete.</string>
+                               </property>
+                              </widget>
+                             </item>
+                            </layout>
+                           </item>
+                          </layout>
+                         </item>
+                         <item>
+                          <spacer name="horizontalSpacer_6">
+                           <property name="orientation">
+                            <enum>Qt::Orientation::Horizontal</enum>
+                           </property>
+                           <property name="sizeHint" stdset="0">
+                            <size>
+                             <width>40</width>
+                             <height>20</height>
+                            </size>
+                           </property>
+                          </spacer>
+                         </item>
+                        </layout>
+                       </item>
+                      </layout>
+                     </item>
+                     <item>
+                      <layout class="QHBoxLayout" name="horizontalLayout_7"/>
+                     </item>
+                    </layout>
+                   </widget>
                   </item>
                   <item>
                    <spacer name="horizontalSpacer_14">
@@ -923,220 +925,222 @@
                    </spacer>
                   </item>
                   <item>
-                   <layout class="QVBoxLayout" name="verticalLayout_6">
-                    <item>
-                     <widget class="QLabel" name="label_11">
-                      <property name="text">
-                       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:12pt;&quot;&gt;Alert settings&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <layout class="QVBoxLayout" name="verticalLayout_5">
-                      <item>
-                       <layout class="QGridLayout" name="gridLayout_3">
-                        <item row="1" column="2">
-                         <layout class="QHBoxLayout" name="horizontalLayout_12">
-                          <item>
-                           <widget class="QLabel" name="label_8">
-                            <property name="minimumSize">
-                             <size>
-                              <width>160</width>
-                              <height>32</height>
-                             </size>
-                            </property>
-                            <property name="text">
-                             <string>min high volume change</string>
-                            </property>
-                           </widget>
-                          </item>
-                          <item>
-                           <widget class="QLineEdit" name="mhvc_line">
-                            <property name="minimumSize">
-                             <size>
-                              <width>180</width>
-                              <height>0</height>
-                             </size>
-                            </property>
-                           </widget>
-                          </item>
-                         </layout>
-                        </item>
-                        <item row="0" column="2">
-                         <layout class="QHBoxLayout" name="horizontalLayout_11">
-                          <item>
-                           <widget class="QLabel" name="label_7">
-                            <property name="minimumSize">
-                             <size>
-                              <width>160</width>
-                              <height>32</height>
-                             </size>
-                            </property>
-                            <property name="text">
-                             <string>min low volume change</string>
-                            </property>
-                           </widget>
-                          </item>
-                          <item>
-                           <widget class="QLineEdit" name="mlvc_line">
-                            <property name="minimumSize">
-                             <size>
-                              <width>180</width>
-                              <height>0</height>
-                             </size>
-                            </property>
-                           </widget>
-                          </item>
-                         </layout>
-                        </item>
-                        <item row="1" column="0">
-                         <layout class="QHBoxLayout" name="horizontalLayout_10">
-                          <item>
-                           <widget class="QLabel" name="label_6">
-                            <property name="minimumSize">
-                             <size>
-                              <width>160</width>
-                              <height>32</height>
-                             </size>
-                            </property>
-                            <property name="text">
-                             <string>min high price change</string>
-                            </property>
-                           </widget>
-                          </item>
-                          <item>
-                           <widget class="QLineEdit" name="mhpc_line">
-                            <property name="minimumSize">
-                             <size>
-                              <width>180</width>
-                              <height>0</height>
-                             </size>
-                            </property>
-                           </widget>
-                          </item>
-                         </layout>
-                        </item>
-                        <item row="0" column="0">
-                         <layout class="QHBoxLayout" name="horizontalLayout_9">
-                          <item>
-                           <widget class="QLabel" name="label_5">
-                            <property name="minimumSize">
-                             <size>
-                              <width>160</width>
-                              <height>32</height>
-                             </size>
-                            </property>
-                            <property name="text">
-                             <string>min low price change</string>
-                            </property>
-                           </widget>
-                          </item>
-                          <item>
-                           <widget class="QLineEdit" name="mlpc_line">
-                            <property name="minimumSize">
-                             <size>
-                              <width>180</width>
-                              <height>0</height>
-                             </size>
-                            </property>
-                           </widget>
-                          </item>
-                         </layout>
-                        </item>
-                        <item row="0" column="1">
-                         <spacer name="horizontalSpacer_15">
-                          <property name="orientation">
-                           <enum>Qt::Orientation::Horizontal</enum>
-                          </property>
-                          <property name="sizeHint" stdset="0">
-                           <size>
-                            <width>40</width>
-                            <height>20</height>
-                           </size>
-                          </property>
-                         </spacer>
-                        </item>
-                       </layout>
-                      </item>
-                      <item>
-                       <spacer name="verticalSpacer_6">
-                        <property name="orientation">
-                         <enum>Qt::Orientation::Vertical</enum>
-                        </property>
-                        <property name="sizeType">
-                         <enum>QSizePolicy::Policy::Fixed</enum>
-                        </property>
-                        <property name="sizeHint" stdset="0">
-                         <size>
-                          <width>20</width>
-                          <height>20</height>
-                         </size>
-                        </property>
-                       </spacer>
-                      </item>
-                      <item>
-                       <layout class="QHBoxLayout" name="horizontalLayout_13">
-                        <item>
-                         <widget class="QCheckBox" name="high_price_drop_check">
-                          <property name="minimumSize">
-                           <size>
-                            <width>0</width>
-                            <height>32</height>
-                           </size>
-                          </property>
-                          <property name="text">
-                           <string>only high price drops</string>
-                          </property>
-                         </widget>
-                        </item>
-                        <item>
-                         <spacer name="horizontalSpacer_7">
-                          <property name="orientation">
-                           <enum>Qt::Orientation::Horizontal</enum>
-                          </property>
-                          <property name="sizeHint" stdset="0">
-                           <size>
-                            <width>20</width>
-                            <height>20</height>
-                           </size>
-                          </property>
-                         </spacer>
-                        </item>
-                       </layout>
-                      </item>
-                      <item>
-                       <layout class="QHBoxLayout" name="horizontalLayout_14">
-                        <item>
-                         <widget class="QPushButton" name="save_alert_button">
-                          <property name="minimumSize">
-                           <size>
-                            <width>100</width>
-                            <height>32</height>
-                           </size>
-                          </property>
-                          <property name="text">
-                           <string>Save alert settings</string>
-                          </property>
-                         </widget>
-                        </item>
-                        <item>
-                         <spacer name="horizontalSpacer_8">
-                          <property name="orientation">
-                           <enum>Qt::Orientation::Horizontal</enum>
-                          </property>
-                          <property name="sizeHint" stdset="0">
-                           <size>
-                            <width>20</width>
-                            <height>20</height>
-                           </size>
-                          </property>
-                         </spacer>
-                        </item>
-                       </layout>
-                      </item>
-                     </layout>
-                    </item>
-                   </layout>
+                   <widget class="QFrame" name="alert_settings_frame">
+                    <layout class="QVBoxLayout" name="verticalLayout_6">
+                     <item>
+                      <widget class="QLabel" name="alert_config_label">
+                       <property name="text">
+                        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:12pt;&quot;&gt;Alert settings&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item>
+                      <layout class="QVBoxLayout" name="verticalLayout_5">
+                       <item>
+                        <layout class="QGridLayout" name="gridLayout_3">
+                         <item row="1" column="2">
+                          <layout class="QHBoxLayout" name="horizontalLayout_12">
+                           <item>
+                            <widget class="QLabel" name="label_8">
+                             <property name="minimumSize">
+                              <size>
+                               <width>160</width>
+                               <height>32</height>
+                              </size>
+                             </property>
+                             <property name="text">
+                              <string>min high volume change</string>
+                             </property>
+                            </widget>
+                           </item>
+                           <item>
+                            <widget class="QLineEdit" name="mhvc_line">
+                             <property name="minimumSize">
+                              <size>
+                               <width>180</width>
+                               <height>0</height>
+                              </size>
+                             </property>
+                            </widget>
+                           </item>
+                          </layout>
+                         </item>
+                         <item row="0" column="2">
+                          <layout class="QHBoxLayout" name="horizontalLayout_11">
+                           <item>
+                            <widget class="QLabel" name="label_7">
+                             <property name="minimumSize">
+                              <size>
+                               <width>160</width>
+                               <height>32</height>
+                              </size>
+                             </property>
+                             <property name="text">
+                              <string>min low volume change</string>
+                             </property>
+                            </widget>
+                           </item>
+                           <item>
+                            <widget class="QLineEdit" name="mlvc_line">
+                             <property name="minimumSize">
+                              <size>
+                               <width>180</width>
+                               <height>0</height>
+                              </size>
+                             </property>
+                            </widget>
+                           </item>
+                          </layout>
+                         </item>
+                         <item row="1" column="0">
+                          <layout class="QHBoxLayout" name="horizontalLayout_10">
+                           <item>
+                            <widget class="QLabel" name="label_6">
+                             <property name="minimumSize">
+                              <size>
+                               <width>160</width>
+                               <height>32</height>
+                              </size>
+                             </property>
+                             <property name="text">
+                              <string>min high price change</string>
+                             </property>
+                            </widget>
+                           </item>
+                           <item>
+                            <widget class="QLineEdit" name="mhpc_line">
+                             <property name="minimumSize">
+                              <size>
+                               <width>180</width>
+                               <height>0</height>
+                              </size>
+                             </property>
+                            </widget>
+                           </item>
+                          </layout>
+                         </item>
+                         <item row="0" column="0">
+                          <layout class="QHBoxLayout" name="horizontalLayout_9">
+                           <item>
+                            <widget class="QLabel" name="label_5">
+                             <property name="minimumSize">
+                              <size>
+                               <width>160</width>
+                               <height>32</height>
+                              </size>
+                             </property>
+                             <property name="text">
+                              <string>min low price change</string>
+                             </property>
+                            </widget>
+                           </item>
+                           <item>
+                            <widget class="QLineEdit" name="mlpc_line">
+                             <property name="minimumSize">
+                              <size>
+                               <width>180</width>
+                               <height>0</height>
+                              </size>
+                             </property>
+                            </widget>
+                           </item>
+                          </layout>
+                         </item>
+                         <item row="0" column="1">
+                          <spacer name="horizontalSpacer_15">
+                           <property name="orientation">
+                            <enum>Qt::Orientation::Horizontal</enum>
+                           </property>
+                           <property name="sizeHint" stdset="0">
+                            <size>
+                             <width>40</width>
+                             <height>20</height>
+                            </size>
+                           </property>
+                          </spacer>
+                         </item>
+                        </layout>
+                       </item>
+                       <item>
+                        <spacer name="verticalSpacer_6">
+                         <property name="orientation">
+                          <enum>Qt::Orientation::Vertical</enum>
+                         </property>
+                         <property name="sizeType">
+                          <enum>QSizePolicy::Policy::Fixed</enum>
+                         </property>
+                         <property name="sizeHint" stdset="0">
+                          <size>
+                           <width>20</width>
+                           <height>20</height>
+                          </size>
+                         </property>
+                        </spacer>
+                       </item>
+                       <item>
+                        <layout class="QHBoxLayout" name="horizontalLayout_13">
+                         <item>
+                          <widget class="QCheckBox" name="high_price_drop_check">
+                           <property name="minimumSize">
+                            <size>
+                             <width>0</width>
+                             <height>32</height>
+                            </size>
+                           </property>
+                           <property name="text">
+                            <string>only high price</string>
+                           </property>
+                          </widget>
+                         </item>
+                         <item>
+                          <spacer name="horizontalSpacer_7">
+                           <property name="orientation">
+                            <enum>Qt::Orientation::Horizontal</enum>
+                           </property>
+                           <property name="sizeHint" stdset="0">
+                            <size>
+                             <width>20</width>
+                             <height>20</height>
+                            </size>
+                           </property>
+                          </spacer>
+                         </item>
+                        </layout>
+                       </item>
+                       <item>
+                        <layout class="QHBoxLayout" name="horizontalLayout_14">
+                         <item>
+                          <widget class="QPushButton" name="save_alert_button">
+                           <property name="minimumSize">
+                            <size>
+                             <width>100</width>
+                             <height>32</height>
+                            </size>
+                           </property>
+                           <property name="text">
+                            <string>Save alert settings</string>
+                           </property>
+                          </widget>
+                         </item>
+                         <item>
+                          <spacer name="horizontalSpacer_8">
+                           <property name="orientation">
+                            <enum>Qt::Orientation::Horizontal</enum>
+                           </property>
+                           <property name="sizeHint" stdset="0">
+                            <size>
+                             <width>20</width>
+                             <height>20</height>
+                            </size>
+                           </property>
+                          </spacer>
+                         </item>
+                        </layout>
+                       </item>
+                      </layout>
+                     </item>
+                    </layout>
+                   </widget>
                   </item>
                   <item>
                    <spacer name="horizontalSpacer_12">
