@@ -18,7 +18,7 @@ import numpy as np
 import weakref
 import threading
 import difflib
-import datetime
+from datetime import datetime
 
 #pyuic6 -o .\GE_helper\output.py .\GE_helper\newUI.ui
 
@@ -153,6 +153,7 @@ class signals(QObject):
     newInProgressItem = pyqtSignal(object)
     newProgressUpdate = pyqtSignal(object)
     inProgressItemComplete = pyqtSignal(object)
+    newUpdate = pyqtSignal(int)
 
 class Worker(QRunnable):
     """Worker thread."""
@@ -254,7 +255,7 @@ class MainWindow(QMainWindow):
                     result = cursor.fetchall()
                     self.updateLocalList()
                     if len(result) == 0:
-                        self.ui.item_count_label.setText("items: " + str(len(self.localList)))
+                        self.ui.item_count_label.setText("Items: " + str(len(self.localList)))
                         repairList = {}
                         curTime = int(time.time())
                         for item in self.localList:
@@ -307,12 +308,17 @@ class MainWindow(QMainWindow):
         self.signals.newInProgressItem.connect(self.addInProgressItem)
         self.signals.newProgressUpdate.connect(self.updateStatus)
         self.signals.inProgressItemComplete.connect(self.removeInProgressItem)
+        self.signals.newUpdate.connect(self.newUpdate)
 
     def setupAlertList(self):
         #minimumSectionSize : int
         self.ui.alert_list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.ui.alert_list.hideColumn(6)
-        
+
+    def newUpdate(self, timestamp):
+        time = datetime.fromtimestamp(timestamp)
+        self.ui.last_update_label.setText("Last Updated: " + datetime.strftime(time, "%H:%M"))
+
     def addInProgressItem(self, worker):
         self.inProgressItems.append(worker)
         self.updateStatus()
@@ -635,7 +641,9 @@ class MainWindow(QMainWindow):
             self.ui.alert_list.setItem(0, 2, QTableWidgetItem(alert.lowPriceChange))
             self.ui.alert_list.setItem(0, 3, QTableWidgetItem(alert.highVolChange))
             self.ui.alert_list.setItem(0, 4, QTableWidgetItem(alert.lowVolChange))
-            self.ui.alert_list.setItem(0, 5, QTableWidgetItem(str(datetime.datetime.fromtimestamp(int(alert.timestamp)))))
+
+            time = datetime.fromtimestamp(int(alert.timestamp))
+            self.ui.alert_list.setItem(0, 5, QTableWidgetItem(datetime.strftime(time, "%H:%M")))
             self.ui.alert_list.setItem(0, 6, QTableWidgetItem(alert.timestamp))
             for j in range(self.ui.alert_list.columnCount()):
                     self.ui.alert_list.item(0, j).setForeground(QBrush(QColor(229, 137, 255)))
@@ -855,6 +863,7 @@ class MainWindow(QMainWindow):
                                         alerts.append(a)
                                         print(f"{name}: low price {lowPriceChange}%, high price {highPriceChange}%, low volume {lowVolChange}%, high volume {highVolChange}%, timeStamp {lastUpdate}")
                     self.signals.newAlerts.emit(alerts, lastUpdate)
+                    self.signals.newUpdate.emit(lastUpdate)
                     database.commit()
                     database.close()
                     timeSinceUpdate = time.time() - lastUpdate
