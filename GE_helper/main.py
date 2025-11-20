@@ -419,6 +419,10 @@ class MainWindow(QMainWindow):
             self.ui.search_bar.setCompleter(self._completer)
             self.ui.search_bar.textEdited.connect(self.on_search_text_edited)
             self.ui.search_bar.returnPressed.connect(self.on_search_entered)
+
+            # intercept Return/Enter when the completer popup is visible so we can
+            # perform the selection without leaving the selected text in the edit.
+            self.ui.search_bar.installEventFilter(self)
         except Exception as e:
             print("setup_search failed:", e)
 
@@ -514,6 +518,7 @@ class MainWindow(QMainWindow):
             # suggestion format is "ID: name"
             id_part = text.split(":", 1)[0].strip()
             self.perform_search(id_part)
+            QTimer.singleShot(0, self.ui.search_bar.clear)
         except Exception as e:
             print("on_completer_activated:", e)
 
@@ -521,6 +526,7 @@ class MainWindow(QMainWindow):
         #user pressed enter in search bar: do final search
         try:
             text = self.ui.search_bar.text().strip()
+            self.ui.search_bar.clear()
             if text == "":
                 return
             # if text looks like "ID: name" extract id, else pass through
@@ -599,6 +605,29 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print("show_search_results:", e)
 
+    def eventFilter(self, obj, event):
+        # intercept Enter/Return on the search bar when completer popup is visible
+        try:
+            if obj is self.ui.search_bar and event.type() == QEvent.Type.KeyPress:
+                key = event.key()
+                if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                    try:
+                        popup = self._completer.popup()
+                        if popup and popup.isVisible():
+                            # get the current completer selection (string "ID: name")
+                            sel = self._completer.currentCompletion()
+                            if sel:
+                                id_part = sel.split(":", 1)[0].strip()
+                                self.perform_search(id_part)
+
+                                QTimer.singleShot(0, self.ui.search_bar.clear)
+                                return True  # consume event
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        return super().eventFilter(obj, event)
+
     def perform_search(self, id_str: str):
         #Final action: show item details / graph for the id.
         try:
@@ -607,7 +636,7 @@ class MainWindow(QMainWindow):
                 if id_ == id_str:
                     # switch UI to graph page and load item
                     try:
-                        self.ui.search_bar.setText(f"{id_}: {name.replace('_',' ')}")
+                        self.ui.search_bar.clear()
                     except Exception:
                         pass
                     self.signals.newItem.emit(id_)
@@ -620,6 +649,7 @@ class MainWindow(QMainWindow):
             # not found -> show results dialog with fuzzy suggestions
             results = self._perform_query(id_str)
             self.show_search_results(results, query=id_str)
+            self.ui.search_bar.clear()
         except Exception as e:
             print("perform_search:", e)
 
