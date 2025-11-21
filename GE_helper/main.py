@@ -267,7 +267,7 @@ class MainWindow(QMainWindow):
                             tableName = "priceHistory5m.itemID" + item[0]
                             command = "SELECT timeStamp from " + tableName + " ORDER BY timeStamp DESC LIMIT 1"
                             lastEntryTime = int(cursor.execute(command).fetchone()[0])
-                            if (curTime - lastEntryTime) > 60*9:
+                            if (curTime - lastEntryTime) > 60*10:
                                 repairList[item[0]] = lastEntryTime
                         if len(repairList) > 0:
                             print(f"found ({len(repairList)}) items needing repair")
@@ -297,7 +297,8 @@ class MainWindow(QMainWindow):
         self.ui.config_button.clicked.connect(self.onConfigButtonToggle)
         self.ui.graph_button.clicked.connect(self.onGraphButtonToggle)
         self.ui.save_alert_button.clicked.connect(self.saveAlertConfig)
-
+        
+        self.ui.alert_list.itemDoubleClicked.connect(self.onAlertDoubleClick)
         #loading screen control
         self.signals.progBarChange.connect(self.updateBar)
         self.signals.loadTextChange.connect(self.updateLoadingText)
@@ -319,6 +320,13 @@ class MainWindow(QMainWindow):
         #minimumSectionSize : int
         self.ui.alert_list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.ui.alert_list.hideColumn(6)
+
+    def onAlertDoubleClick(self, item):
+        self.ui.alert_list.clearSelection()
+        if item.column() == 0:
+            itemID = item.text().split(":")[0]
+            self.signals.newItem.emit(itemID)
+            self.ui.main_stack_widget.setCurrentIndex(1)
 
     def newUpdate(self, timestamp):
         time = datetime.fromtimestamp(timestamp)
@@ -907,7 +915,7 @@ class MainWindow(QMainWindow):
                     else:
                         print(f"time since last update: {timeSinceUpdate}")
                         time.sleep(60)
-            time.sleep(1)
+            time.sleep(10)
 
     def buildDB(self, worker = None):
         print("buildDB starting...")

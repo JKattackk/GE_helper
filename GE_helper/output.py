@@ -759,6 +759,7 @@ class Ui_MainWindow(object):
         self.alert_list.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         self.alert_list.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.alert_list.setLineWidth(5)
+        self.alert_list.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
         self.alert_list.setProperty("showDropIndicator", False)
         self.alert_list.setDragDropOverwriteMode(False)
         self.alert_list.setDefaultDropAction(QtCore.Qt.DropAction.IgnoreAction)
