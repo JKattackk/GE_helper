@@ -32,6 +32,7 @@ headers = {
 
 filteredItemListValues = "(id INTEGER PRIMARY KEY, itemName, buyLimit, lowPrice, highPrice, value, highAlch, lowVolume, highVolume, lowPriceChange, highPriceChange, lowVolumeChange, highVolumeChange, timestamp, tracked)"
 priceHistory5mValues = "(timeStamp INTEGER NOT NULL PRIMARY KEY, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume)"
+latestURL = "https://prices.runescape.wiki/api/v1/osrs/latest"
 
 alertConfigFile = "cfg/alertConfig.json"
 filterConfigFile = "cfg/filterConfig.json"
@@ -213,6 +214,14 @@ class MainWindow(QMainWindow):
             super(MainWindow, self).__init__()
             self.ui = Ui_MainWindow()
             self.ui.setupUi(self)
+            print("filter_config_widget:", self.ui.filter_config_widget.metaObject().className(), self.ui.filter_config_widget.objectName())
+            print("alert_config_widget: ", self.ui.alert_config_widget.metaObject().className(), self.ui.alert_config_widget.objectName())
+            for name in ("filter_config_widget", "alert_config_widget"):
+                w = getattr(self.ui, name, None)
+                if w is not None:
+                    # allow QSS to paint the widget background
+                    w.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+                    w.setAutoFillBackground(True)
             #status indicator setup
             try:
                 placeholder = self.ui.indicator_widget  # placeholder created by .ui
@@ -267,7 +276,7 @@ class MainWindow(QMainWindow):
                             tableName = "priceHistory5m.itemID" + item[0]
                             command = "SELECT timeStamp from " + tableName + " ORDER BY timeStamp DESC LIMIT 1"
                             lastEntryTime = int(cursor.execute(command).fetchone()[0])
-                            if (curTime - lastEntryTime) > 60*10:
+                            if (curTime - lastEntryTime) > 60*20:
                                 repairList[item[0]] = lastEntryTime
                         if len(repairList) > 0:
                             print(f"found ({len(repairList)}) items needing repair")
@@ -827,6 +836,28 @@ class MainWindow(QMainWindow):
         while True:
             if worker.is_killed:
                 break
+            response = json.loads(requests.get(latestURL, headers = headers).text)
+            try:
+                data = response.get("data")
+                database = sqlite3.connect('database.db')
+                cursor = database.cursor()
+                cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
+                trackedIDs = cursor.execute('SELECT id from filteredDB WHERE tracked=TRUE').fetchall()
+                for id in trackedIDs:
+                    id_str = ''.join(str(value) for value in id)
+                    name = cursor.execute(f'SELECT itemName from filteredDB WHERE id = {id_str}').fetchall()
+                    highPrice = data.get(id_str).get("high")
+                    tableName = "priceHistory5m.itemID" + id_str
+                    oneDayAvg = self.getOneDayAvg(database, tableName, lastUpdate)
+                    try:
+                        highPriceChange = (highPrice / oneDayAvg.get("avgHighPrice"))*100 - 100
+                    except:
+                        highPriceChange = 0
+                    if highPriceChange < -50:
+                        print(f"{id_str}: {name} highPrice: {highPrice}  Change: {highPriceChange}")
+            except Exception as e:
+                print(e)
+            database.close()
             if (int(time.time()) - int(lastUpdate)) > 305:
                 database = sqlite3.connect('database.db')
                 cursor = database.cursor()
@@ -915,7 +946,9 @@ class MainWindow(QMainWindow):
                     else:
                         print(f"time since last update: {timeSinceUpdate}")
                         time.sleep(60)
-            time.sleep(10)
+                else:
+                    database.close()
+            time.sleep(30)
 
     def buildDB(self, worker = None):
         print("buildDB starting...")
@@ -1313,6 +1346,7 @@ if __name__ == "__main__":
         with open("theme.qss") as theme:
             theme_str = theme.read()
             app.setStyleSheet(theme_str)
+            print(app.styleSheet)
         
         if not hasattr(app, "main_window"):
             app.main_window = MainWindow()

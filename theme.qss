@@ -1,39 +1,32 @@
-
-#central_widget {
-	background-color: #353741;
-}	
-#alert_area {
-	background-color: #595d61;
+/* top bar */
+#header_bar{
+	border-bottom-width: 2px;
+	border-style: ridge;
+	background-color: #131418;
+	
 }
-QTableWidget#alert_list {
-	background-color: rgba(255,255,255, .1);
-}
-
-#alert_list {
-	background-color: #595d61;
+#icon_area{
+	border-bottom-width: 2px;
+	border-style: ridge;
+	background-color: #131418;
 }
 
+/* side bar */
 #sidebar_widget {
-	background-color: #20222d;
+	background-color: #202127;
 }
 
-#header_bar {
-	background-color: #20222d;
-}
-#icon_area {
-	background-color: #20222d;
+/* center frame */
+#central_widget {
+	background-color: #34373a;
 }
 
+/* history sidebar */
 #history_list {
 	background-color: #34373a;
 }
-QLineEdit{
-	color: #f5f5f5;
-}
 
-QScrollArea#alert_scroll_area{
-	background-color: rgba(0, 0, 0, 0);
-}
+/* alert area and table config */
 QTableWidget#alert_list{
 	
 	background-color: #353741;
@@ -59,10 +52,21 @@ QHeaderView::section{
 	gridline-color: rgba(255,255,255,10);
 }
 
+QLineEdit{
+	color: #f5f5f5;
+}
 QLineEdit#search_bar{
 	color: #f5f5f5;
 	background-color: rgba(255, 255, 255, 0.4);
 }
+
+#filter_config_widget{
+	background-color: #505255;
+}
+#alert_config_widget{
+	background-color: #505255;
+}
+
 QPushButton{
 	color: #f5f5f5;
 	background-color: rgba(0, 0, 0, 0);
@@ -72,9 +76,6 @@ QPushButton{
 	border-top-width: 1px;
 	border-bottom-width: 1px;
 	font: bold 14px;
-}
-QRadioButton#status_indicator{
-	color: #fa2626;
 }
 QPushButton:checked{
 	color: #f5f5f5;
@@ -106,6 +107,7 @@ QPushButton#trends_button{
 QPushButton#graph_button{
 	border-top-width: 0px;
 }
+
 QCheckBox{
 	color: #f5f5f5;
 }
@@ -113,16 +115,7 @@ QLabel{
 	color: #F9F6EE;
 	font: 14px;
 }
-QFrame#header_bar{
-	border-bottom-width: 2px;
-	border-style: ridge;
-	border-color: rgba(255, 255, 255, 40);
-}
-QWidget#icon_area{
-	border-bottom-width: 2px;
-	border-style: ridge;
-	border-color: rgba(255, 255, 255, 40);
-}
+
 QFrame#graph_info_frame{
 	border-width: 2px;
 	border-style:inset;
@@ -135,3 +128,4 @@ QFrame#main_graph_frame{
 	border-color: rgba(255, 255, 255, 40);
 	color: rgba(255, 255, 255, 10);
 }
+
