@@ -19,7 +19,7 @@ import weakref
 import threading
 import difflib
 from datetime import datetime
-
+from dateutil import tz
 #pyuic6 -o .\GE_helper\output.py .\GE_helper\newUI.ui
 
 itemListURL = "https://chisel.weirdgloop.org/gazproj/gazbot/os_dump.json"
@@ -1175,7 +1175,8 @@ class MainWindow(QMainWindow):
             }
             df = pd.DataFrame(data)
             #convert to datetime
-            df['datetime'] = pd.to_datetime(df['time'], unit='s', utc=True)
+            local_tz = tz.tzlocal()
+            df['datetime'] = pd.to_datetime(df['time'], unit='s', utc = True).dt.tz_convert(local_tz)
 
             #Downsample / aggregate if dataset is large to keep interactive performance
             max_points = 3000
