@@ -168,9 +168,12 @@ class Alert:
             key=lambda a: (-int(a.timestamp), -int(a.startTimestamp), -float(a.highVolChange.rstrip('%'))))
     @classmethod
     def removeOldAlerts(cls, cutoffTime):
+        removeIDs = []
         for a in cls._alerts:
             if int(cls._alerts[a].timestamp) < cutoffTime:
-                del  cls._alerts[a]
+                removeIDs.append(a)
+        for id in removeIDs:
+            del cls._alerts[id]
     @classmethod
     def alertExists(cls,id):
         return id in cls._alerts
