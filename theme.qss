@@ -1,3 +1,12 @@
+QFrame#filter_config_frame{
+	background-color: #5488cf;
+	color: #F9F6EE;
+	border-width: 3px;
+	border-color: #a4a7b6;
+}
+QFrame#alert_config_frame{
+	background-color: #999ea5;
+}
 /* top bar */
 #header_bar{
 	border-bottom-width: 2px;
@@ -28,43 +37,28 @@
 
 /* alert area and table config */
 QTableWidget#alert_list{
-	
 	background-color: #353741;
 	border: 1px solid #000d16;
 	gridline-color: rgba(255,255,255,10);
-	
 }
 QTableWidget::item{
 	background-color: #202127;
 	border: 1px solid #000d16;
-	gridline-color: rgba(255,255,255,10);;
+	gridline-color: rgba(255,255,255,10);
 }
 QHeaderView{
-	color: #f5f5f5;
-	background-color: #131418;
-	border: 1px solid #000d16;
-	gridline-color: rgba(255,255,255,10);
+	border: 1px solid #131418;
 }
 QHeaderView::section{
-	color: #f5f5f5;
+	color: #f5f5f5; /* header text color */
 	background-color: #131418;
 	border: 1px solid #000d16;
-	gridline-color: rgba(255,255,255,10);
 }
-
 QLineEdit{
 	color: #f5f5f5;
 }
 QLineEdit#search_bar{
-	color: #f5f5f5;
 	background-color: rgba(255, 255, 255, 0.4);
-}
-
-#filter_config_widget{
-	background-color: #505255;
-}
-#alert_config_widget{
-	background-color: #505255;
 }
 
 QPushButton{
@@ -120,12 +114,9 @@ QFrame#graph_info_frame{
 	border-width: 2px;
 	border-style:inset;
 	border-color: rgba(255, 255, 255, 40);
-	color: rgba(255, 255, 255, 10);
 }
 QFrame#main_graph_frame{
 	border-width: 2px;
 	border-style: inset;
 	border-color: rgba(255, 255, 255, 40);
-	color: rgba(255, 255, 255, 10);
 }
-

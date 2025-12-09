@@ -16,6 +16,9 @@
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
+  <property name="autoFillBackground">
+   <bool>true</bool>
+  </property>
   <property name="styleSheet">
    <string notr="true"/>
   </property>
@@ -57,6 +60,9 @@
        <number>0</number>
       </property>
       <widget class="QWidget" name="main_widget">
+       <property name="autoFillBackground">
+        <bool>false</bool>
+       </property>
        <layout class="QGridLayout" name="gridLayout">
         <property name="leftMargin">
          <number>0</number>
@@ -178,6 +184,13 @@
               </size>
              </property>
             </spacer>
+           </item>
+           <item>
+            <widget class="QPushButton" name="stylesheet_button">
+             <property name="text">
+              <string>stylesheet</string>
+             </property>
+            </widget>
            </item>
            <item>
             <widget class="QFrame" name="frame">
@@ -395,7 +408,7 @@
               </widget>
              </item>
              <item>
-              <widget class="QPushButton" name="cycles_button">
+              <widget class="QPushButton" name="alerts_button">
                <property name="enabled">
                 <bool>false</bool>
                </property>
@@ -406,7 +419,7 @@
                 </size>
                </property>
                <property name="text">
-                <string>Cycles</string>
+                <string>Alerts</string>
                </property>
                <property name="checkable">
                 <bool>true</bool>
@@ -592,7 +605,7 @@
                  <string notr="true">background-color: rgba(255, 255, 255, 0);</string>
                 </property>
                 <property name="currentIndex">
-                 <number>0</number>
+                 <number>2</number>
                 </property>
                 <widget class="QWidget" name="config_page">
                  <layout class="QVBoxLayout" name="verticalLayout_8">
@@ -628,9 +641,12 @@
                      </spacer>
                     </item>
                     <item>
-                     <widget class="QWidget" name="filter_config_widget" native="true">
+                     <widget class="QFrame" name="filter_config_frame">
                       <property name="autoFillBackground">
-                       <bool>true</bool>
+                       <bool>false</bool>
+                      </property>
+                      <property name="styleSheet">
+                       <string notr="true"/>
                       </property>
                       <layout class="QVBoxLayout" name="verticalLayout_7">
                        <item>
@@ -642,7 +658,7 @@
                           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:12pt;&quot;&gt;Filter settings&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
                          </property>
                          <property name="buddy">
-                          <cstring>filter_config_widget</cstring>
+                          <cstring>filter_config_frame</cstring>
                          </property>
                         </widget>
                        </item>
@@ -970,9 +986,12 @@
                      </spacer>
                     </item>
                     <item>
-                     <widget class="QWidget" name="alert_config_widget" native="true">
+                     <widget class="QFrame" name="alert_config_frame">
                       <property name="autoFillBackground">
-                       <bool>true</bool>
+                       <bool>false</bool>
+                      </property>
+                      <property name="styleSheet">
+                       <string/>
                       </property>
                       <layout class="QVBoxLayout" name="verticalLayout_6">
                        <item>
@@ -2047,7 +2066,70 @@
                   </item>
                  </layout>
                 </widget>
-                <widget class="QWidget" name="cycle_page"/>
+                <widget class="QWidget" name="alerts_page">
+                 <layout class="QHBoxLayout" name="horizontalLayout_21">
+                  <item>
+                   <widget class="QSplitter" name="alertPage_vertical_splitter">
+                    <property name="orientation">
+                     <enum>Qt::Orientation::Vertical</enum>
+                    </property>
+                    <widget class="QTableWidget" name="page_alert_list">
+                     <column>
+                      <property name="text">
+                       <string>Item</string>
+                      </property>
+                     </column>
+                     <column>
+                      <property name="text">
+                       <string>High Price</string>
+                      </property>
+                     </column>
+                     <column>
+                      <property name="text">
+                       <string>Low Price</string>
+                      </property>
+                     </column>
+                     <column>
+                      <property name="text">
+                       <string>High Vol</string>
+                      </property>
+                     </column>
+                     <column>
+                      <property name="text">
+                       <string>Low Vol</string>
+                      </property>
+                     </column>
+                     <column>
+                      <property name="text">
+                       <string>Time</string>
+                      </property>
+                     </column>
+                    </widget>
+                    <widget class="QSplitter" name="alertPage_horizontal_splitter">
+                     <property name="orientation">
+                      <enum>Qt::Orientation::Horizontal</enum>
+                     </property>
+                     <widget class="QFrame" name="frame_2">
+                      <property name="frameShape">
+                       <enum>QFrame::Shape::StyledPanel</enum>
+                      </property>
+                      <property name="frameShadow">
+                       <enum>QFrame::Shadow::Raised</enum>
+                      </property>
+                     </widget>
+                     <widget class="QFrame" name="frame_3">
+                      <property name="frameShape">
+                       <enum>QFrame::Shape::StyledPanel</enum>
+                      </property>
+                      <property name="frameShadow">
+                       <enum>QFrame::Shadow::Raised</enum>
+                      </property>
+                     </widget>
+                    </widget>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
                 <widget class="QWidget" name="savedPage"/>
                 <widget class="QWidget" name="portfolioPage"/>
                 <widget class="QWidget" name="trendsPage">
@@ -2219,6 +2301,9 @@
             </item>
             <item>
              <widget class="QScrollArea" name="alert_scroll_area">
+              <property name="enabled">
+               <bool>true</bool>
+              </property>
               <property name="sizePolicy">
                <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
                 <horstretch>0</horstretch>
@@ -2238,12 +2323,15 @@
                <bool>true</bool>
               </property>
               <widget class="QWidget" name="alert_area">
+               <property name="enabled">
+                <bool>true</bool>
+               </property>
                <property name="geometry">
                 <rect>
                  <x>0</x>
                  <y>0</y>
                  <width>1442</width>
-                 <height>210</height>
+                 <height>198</height>
                 </rect>
                </property>
                <layout class="QHBoxLayout" name="horizontalLayout_36">
@@ -2264,6 +2352,9 @@
                 </property>
                 <item>
                  <widget class="QTableWidget" name="alert_list">
+                  <property name="enabled">
+                   <bool>true</bool>
+                  </property>
                   <property name="focusPolicy">
                    <enum>Qt::FocusPolicy::ClickFocus</enum>
                   </property>
@@ -2320,7 +2411,7 @@
                   </attribute>
                   <column>
                    <property name="text">
-                    <string>ID:Name</string>
+                    <string>Item</string>
                    </property>
                   </column>
                   <column>
@@ -2346,11 +2437,6 @@
                   <column>
                    <property name="text">
                     <string>Time</string>
-                   </property>
-                  </column>
-                  <column>
-                   <property name="text">
-                    <string>timeStamp</string>
                    </property>
                   </column>
                  </widget>
@@ -2471,7 +2557,7 @@
                <set>Qt::AlignmentFlag::AlignCenter</set>
               </property>
               <property name="buddy">
-               <cstring>alert_config_widget</cstring>
+               <cstring>alert_config_frame</cstring>
               </property>
              </widget>
             </item>

@@ -37,7 +37,7 @@ latestURL = "https://prices.runescape.wiki/api/v1/osrs/latest"
 alertConfigFile = "cfg/alertConfig.json"
 filterConfigFile = "cfg/filterConfig.json"
 
-## default item filter valuues
+## default item filter values
 def_minBuyLimitValue = 2000000
 def_minHourlyThroughput = 5000000
 def_minHourlyVolume = 1000
@@ -131,7 +131,8 @@ class StatusIndicator(QWidget):
         QToolTip.hideText()
         super().leaveEvent(event)
 
-class alert:
+class Alert:
+    _alerts = {}
     def __init__(self, id, name, lowPriceChange, highPriceChange, lowVolChange, highVolChange, timestamp):
         self.id = str(id)
         self.name = str(name)
@@ -140,6 +141,41 @@ class alert:
         self.lowVolChange = f"{lowVolChange:.2f}%"
         self.highVolChange = f"{highVolChange:.2f}%"
         self.timestamp = str(timestamp)
+        self.startTimestamp = str(timestamp)
+        Alert._alerts[self.id] = self
+    
+    @classmethod
+    def updateAlert(cls, id, name, lowPriceChange, highPriceChange, lowVolChange, highVolChange, timestamp):
+        if id in cls._alerts:
+            a = cls._alerts[str(id)]
+            a.name = str(name)
+            a.lowPriceChange = f"{lowPriceChange:.2f}%"
+            a.highPriceChange = f"{highPriceChange:.2f}%"
+            a.lowVolChange = f"{lowVolChange:.2f}%"
+            a.highVolChange = f"{highVolChange:.2f}%"
+            a.timestamp = str(timestamp)
+        else:
+            print("Attempted to update nonexistent alert: " + str(id))
+    @classmethod
+    def getAlerts(cls):
+        # returns dict of alerts (as stored in class)
+        return cls._alerts
+    @classmethod
+    def getAlertsList(cls):
+        # returns ordered array of alert objects
+        # latest timestamp first, if tied then highest startTimeStamp, if tied then highest highVolChange
+        return sorted(cls._alerts.values(), 
+            key=lambda a: (-int(a.timestamp), -int(a.startTimestamp), -float(a.highVolChange.rstrip('%'))))
+    @classmethod
+    def removeOldAlerts(cls, cutoffTime):
+        for a in cls._alerts:
+            if int(cls._alerts[a].timestamp) < cutoffTime:
+                del  cls._alerts[a]
+    @classmethod
+    def alertExists(cls,id):
+        return id in cls._alerts
+    
+        
     
 class signals(QObject):
     #indicates new price update. Includes unix timestamp of last update
@@ -214,12 +250,10 @@ class MainWindow(QMainWindow):
             super(MainWindow, self).__init__()
             self.ui = Ui_MainWindow()
             self.ui.setupUi(self)
-            print("filter_config_widget:", self.ui.filter_config_widget.metaObject().className(), self.ui.filter_config_widget.objectName())
-            print("alert_config_widget: ", self.ui.alert_config_widget.metaObject().className(), self.ui.alert_config_widget.objectName())
-            for name in ("filter_config_widget", "alert_config_widget"):
+            # Ensure these frames accept QSS-painted backgrounds
+            for name in ("filter_config_frame", "alert_config_frame"):
                 w = getattr(self.ui, name, None)
                 if w is not None:
-                    # allow QSS to paint the widget background
                     w.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
                     w.setAutoFillBackground(True)
             #status indicator setup
@@ -276,7 +310,7 @@ class MainWindow(QMainWindow):
                             tableName = "priceHistory5m.itemID" + item[0]
                             command = "SELECT timeStamp from " + tableName + " ORDER BY timeStamp DESC LIMIT 1"
                             lastEntryTime = int(cursor.execute(command).fetchone()[0])
-                            if (curTime - lastEntryTime) > 60*20:
+                            if (curTime - lastEntryTime) > 60*23: #23 minutes
                                 repairList[item[0]] = lastEntryTime
                         if len(repairList) > 0:
                             print(f"found ({len(repairList)}) items needing repair")
@@ -305,7 +339,12 @@ class MainWindow(QMainWindow):
         self.ui.history_button.toggled['bool'].connect(self.onHistoryButtonToggle)
         self.ui.config_button.clicked.connect(self.onConfigButtonToggle)
         self.ui.graph_button.clicked.connect(self.onGraphButtonToggle)
+        self.ui.alerts_button.clicked.connect(self.onAlertsButtonToggle)
         self.ui.save_alert_button.clicked.connect(self.saveAlertConfig)
+
+        self.ui.main_stack_widget.currentChanged['int'].connect(self.pageChange)
+
+        self.ui.stylesheet_button.clicked.connect(self.updateStylesheet)
         
         self.ui.alert_list.itemDoubleClicked.connect(self.onAlertDoubleClick)
         #loading screen control
@@ -325,10 +364,17 @@ class MainWindow(QMainWindow):
         self.signals.inProgressItemComplete.connect(self.removeInProgressItem)
         self.signals.newUpdate.connect(self.newUpdate)
 
+    def updateStylesheet(self):
+        print("updating stylesheet")
+        try:
+            with open("theme.qss") as theme:
+                theme_str = theme.read()
+                app.setStyleSheet(theme_str)
+        except Exception as e:
+            print(f"Error updating stylesheet: {e}")
+
     def setupAlertList(self):
-        #minimumSectionSize : int
         self.ui.alert_list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.ui.alert_list.hideColumn(6)
 
     def onAlertDoubleClick(self, item):
         self.ui.alert_list.clearSelection()
@@ -340,6 +386,8 @@ class MainWindow(QMainWindow):
     def newUpdate(self, timestamp):
         time = datetime.fromtimestamp(timestamp)
         self.ui.last_update_label.setText("Last Updated: " + datetime.strftime(time, "%H:%M"))
+        self.updateAlerts(timestamp)
+
 
     def addInProgressItem(self, worker):
         self.inProgressItems.append(worker)
@@ -380,6 +428,8 @@ class MainWindow(QMainWindow):
         self.ui.main_stack_widget.setCurrentIndex(1)
         self.ui.graph_button.setEnabled(True)
         self.ui.graph_button.setChecked(True)
+        self.ui.alerts_button.setEnabled(True)
+
         self.setupSearch()
         self.ui.search_bar.setEnabled(True)
         print("main window setup complete")
@@ -684,36 +734,36 @@ class MainWindow(QMainWindow):
             self.ui.history_list.setVisible(True)
         else:
             self.ui.history_list.setVisible(False)
+    def onAlertsButtonToggle(self):
+        self.ui.main_stack_widget.setCurrentIndex(2)
     
-    def updateAlerts(self, alerts, updateTime):
-        for alert in alerts:
-            self.ui.alert_list.insertRow(0)
-            self.ui.alert_list.setItem(0, 0, QTableWidgetItem(f"{alert.id}: {alert.name} "))
-            self.ui.alert_list.setItem(0, 1, QTableWidgetItem(alert.highPriceChange))
-            self.ui.alert_list.setItem(0, 2, QTableWidgetItem(alert.lowPriceChange))
-            self.ui.alert_list.setItem(0, 3, QTableWidgetItem(alert.highVolChange))
-            self.ui.alert_list.setItem(0, 4, QTableWidgetItem(alert.lowVolChange))
+    def pageChange(self, index):
+        if index == 2:
+            self.ui.alert_scroll_area.setVisible(False)
+        else:
+            self.ui.alert_scroll_area.setVisible(True)
 
-            time = datetime.fromtimestamp(int(alert.timestamp))
-            self.ui.alert_list.setItem(0, 5, QTableWidgetItem(datetime.strftime(time, "%H:%M")))
-            self.ui.alert_list.setItem(0, 6, QTableWidgetItem(alert.timestamp))
-            for j in range(self.ui.alert_list.columnCount()):
-                    self.ui.alert_list.item(0, j).setForeground(QBrush(QColor(229, 137, 255)))
-        i = 0
-        while i < self.ui.alert_list.rowCount():
-            if int(self.ui.alert_list.item(i, 6).text()) != updateTime:
-                print("make it yellow or gray or something to show it's old")
-                for j in range(self.ui.alert_list.columnCount()):
-                    self.ui.alert_list.item(i, j).setForeground(QBrush(QColor(255, 254, 178)))
-                if updateTime - int(self.ui.alert_list.item(i, 6).text())  >= 8*60: # over 8 minutes old
-                    print("removing old alert")
-                    self.ui.alert_list.removeRow(i)
+    def updateAlerts(self, updateTime):
+        Alert.removeOldAlerts(updateTime - 10*60) # remove alerts older than 10 minutes (since last update)
+        alerts = Alert.getAlertsList()
+        if len(alerts) > 0:
+            for i in range(len(alerts)):
+                a = alerts[i]
+                self.ui.alert_list.insertRow(i)
+                self.ui.alert_list.setItem(i, 0, QTableWidgetItem(f"{a.id}: {a.name} "))
+                self.ui.alert_list.setItem(i, 1, QTableWidgetItem(a.highPriceChange))
+                self.ui.alert_list.setItem(i, 2, QTableWidgetItem(a.lowPriceChange))
+                self.ui.alert_list.setItem(i, 3, QTableWidgetItem(a.highVolChange))
+                self.ui.alert_list.setItem(i, 4, QTableWidgetItem(a.lowVolChange))
+                time = datetime.fromtimestamp(int(a.timestamp))
+                self.ui.alert_list.setItem(i, 5, QTableWidgetItem(datetime.strftime(time, "%H:%M")))
+                if int(a.timestamp)!= updateTime: # old alert coloring
+                    for j in range(self.ui.alert_list.columnCount()):
+                        self.ui.alert_list.item(i, j).setForeground(QBrush(QColor(255, 254, 178)))
                 else:
-                    # i is only iterated when the row stays in the table to prevent indexing errors
-                    i = i+1
-            else:
-                # i is only iterated when the row stays in the table to prevent indexing errors
-                i = i+1
+                    for j in range(self.ui.alert_list.columnCount()): # new alert coloring
+                        self.ui.alert_list.item(i, j).setForeground(QBrush(QColor(229, 137, 255)))
+        self.ui.alert_list.setRowCount(len(alerts))
 
     def rebuildDBPressed(self):
         self.ui.splash_stacked.setCurrentIndex(1)
@@ -929,23 +979,24 @@ class MainWindow(QMainWindow):
                                         highVolChange = 0
                                     command = "UPDATE filteredDB set lowPrice = ?, highPrice = ?, lowVolume = ?, highVolume = ?, lowPriceChange = ?, highPriceChange = ?, lowVolumeChange = ?, highVolumeChange = ? WHERE id = ?"
                                     cursor.execute(command, (avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume, lowPriceChange, highPriceChange, lowVolChange, highVolChange, id[0]))
+                                    
+                                    # alert conditions
                                     if (lowPriceChange <= -abs(minLowPriceChange) or highPriceChange <= -abs(minHighPriceChange)) and (lowVolChange >= minLowVolChange or highVolChange >= minHighVolChange):
                                         command = "SELECT itemName FROM filteredDB WHERE id = ?"
                                         name = cursor.execute(command, id).fetchone()[0]
-                                        a = alert(id= str(id[0]), name = name, lowPriceChange = lowPriceChange, highPriceChange = highPriceChange, 
+
+                                        if Alert.alertExists(id[0]):
+                                            Alert.updateAlert(id= id[0], name = name, lowPriceChange = lowPriceChange, highPriceChange = highPriceChange, 
                                                     lowVolChange = lowVolChange, highVolChange = highVolChange, timestamp = lastUpdate)
-                                        alerts.append(a)
+                                        else:
+                                            a = Alert(id= id[0], name = name, lowPriceChange = lowPriceChange, highPriceChange = highPriceChange, 
+                                                lowVolChange = lowVolChange, highVolChange = highVolChange, timestamp = lastUpdate)
                                         print(f"{name}: low price {lowPriceChange}%, high price {highPriceChange}%, low volume {lowVolChange}%, high volume {highVolChange}%, timeStamp {lastUpdate}")
-                    self.signals.newAlerts.emit(alerts, lastUpdate)
                     self.signals.newUpdate.emit(lastUpdate)
                     database.commit()
                     database.close()
                     timeSinceUpdate = time.time() - lastUpdate
-                    if timeSinceUpdate < 250:
-                        time.sleep(250 - timeSinceUpdate)
-                    else:
-                        print(f"time since last update: {timeSinceUpdate}")
-                        time.sleep(60)
+                    print(f"time since last update: {timeSinceUpdate}")
                 else:
                     database.close()
             time.sleep(30)
@@ -1318,6 +1369,12 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         print("Window close event triggered!")
         super().closeEvent(event)
+        for worker in get_active_workers_snapshot():
+            try:
+                worker.kill()
+            except Exception as e:
+                print("worker ", worker)
+                print("Exception ", e)
         print(event)
 
     def showEvent(self, event):
@@ -1347,7 +1404,8 @@ if __name__ == "__main__":
         with open("theme.qss") as theme:
             theme_str = theme.read()
             app.setStyleSheet(theme_str)
-            print(app.styleSheet)
+            print("Loaded stylesheet length:", len(theme_str))
+            print("Preview:", theme_str[:200].replace("\n"," "))
         
         if not hasattr(app, "main_window"):
             app.main_window = MainWindow()
