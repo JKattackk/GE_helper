@@ -2,26 +2,35 @@ import sys
 import os.path
 import json
 import sqlite3
-import time
 import requests
+import traceback
+import weakref
+import threading
+
+import numpy as np
+import difflib
+import pandas as pd
+
+import time
+from datetime import datetime
+from dateutil import tz
+
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
-import pandas as pd
-import traceback
+
+
 from PyQt6.QtSql import *
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtWebEngineWidgets import QWebEngineView
-from output import Ui_MainWindow
 from PyQt6.QtGui import QColor, QPainter, QBrush, QPen, QFontDatabase, QMouseEvent, QPaintEvent, QEnterEvent
-import numpy as np
-import weakref
-import threading
-import difflib
-from datetime import datetime
-from dateutil import tz
+from output import Ui_MainWindow
+
+
+
 #pyuic6 -o .\GE_helper\output.py .\GE_helper\newUI.ui
 
+# URLS for API calls
 itemListURL = "https://chisel.weirdgloop.org/gazproj/gazbot/os_dump.json"
 priceHistory5mURL = url = "https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=5m&id="
 itemLookupURL = "https://www.ge-tracker.com/item/"
@@ -31,10 +40,11 @@ headers = {
     'User-Agent': 'GE price trend tracking wip discord @kat6541'
 }
 
+# database table schemas
 filteredItemListValues = "(id INTEGER PRIMARY KEY, itemName, buyLimit, lowPrice, highPrice, value, highAlch, lowVolume, highVolume, lowPriceChange, highPriceChange, lowVolumeChange, highVolumeChange, timestamp, tracked)"
 priceHistory5mValues = "(timeStamp INTEGER NOT NULL PRIMARY KEY, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume)"
 
-
+# config file paths
 alertConfigFile = "cfg/alertConfig.json"
 filterConfigFile = "cfg/filterConfig.json"
 
@@ -46,13 +56,13 @@ def_maxPrice = 10000000
 def_priceChangePercent = 10
 def_volChangePercent = 100
 
-
-
 # global registry of active Worker instances (weakrefs avoid leaks)
 active_workers = weakref.WeakSet()
 active_workers_lock = threading.Lock()
 
 def textToInt(string):
+    """Attempts to convert strings to integers, allowing suffixed k, m, and b for thousand, milliod, and billion
+    Used in config input parsing"""
     try:
         return int(string)
     except:
@@ -75,11 +85,13 @@ def textToInt(string):
                 raise ValueError
             
 class StatusIndicator(QWidget):
+    """Circular indicator widget for showing app status
+     Main status indicated via color, tooltip shows details on hover"""
     PRESETS = {
         "initializing": QColor("#FFFFFF"),
-        "ok": QColor("#41e968"),
-        "working": QColor("#f3a033"),
-        "error": QColor("#e53935"),
+        "ok": QColor("#41e968"), #normal app behavior
+        "working": QColor("#f3a033"), #background tasks in progress (database rebuilds, )
+        "error": QColor("#e53935"), #critical error (refused connections, unhandled exceptions)
         "off": QColor("#808080")
     }
     def __init__(self, parent=None, diameter=14):
@@ -91,9 +103,8 @@ class StatusIndicator(QWidget):
         self.setToolTip("Status: unset")
 
     def set_status(self, name_or_color, tooltip: str | None = None):
-        """Set named status (ok/warn/error/off/busy) or pass a QColor / hex string.
-        Optionally update the tooltip text.
-        """
+        """Set named status (ok/warn/error/off/busy) or pass a QColor / hex string
+        Optionally update the tooltip text"""
         if isinstance(name_or_color, QColor):
             self._color = name_or_color
         else:
@@ -133,6 +144,9 @@ class StatusIndicator(QWidget):
         super().leaveEvent(event)
 
 class Alert:
+    """Represents a 5m alert detected in itemPriceLoop
+    Each alert stores id, name, lowPriceChange, highPriceChange, lowVolChange, highVolChange, timestamp
+    All alerts are stored in dict _alerts keyed by id"""
     _alerts = {}
     def __init__(self, id, name, lowPriceChange, highPriceChange, lowVolChange, highVolChange, timestamp):
         self.id = str(id)
@@ -147,6 +161,7 @@ class Alert:
     
     @classmethod
     def updateAlert(cls, id, name, lowPriceChange, highPriceChange, lowVolChange, highVolChange, timestamp):
+        """update an existing alert by id with new values"""
         if id in cls._alerts:
             a = cls._alerts[str(id)]
             a.name = str(name)
@@ -157,37 +172,45 @@ class Alert:
             a.timestamp = str(timestamp)
         else:
             print("Attempted to update nonexistent alert: " + str(id))
+    
     @classmethod
     def getAlerts(cls):
-        # returns dict of alerts (as stored in class)
+        """returns dict of alerts keyed by id as stored in class"""
         return cls._alerts
+    
     @classmethod
     def getAlertsList(cls):
-        # returns ordered array of alert objects
-        # latest timestamp first, if tied then highest startTimeStamp, if tied then highest highVolChange
+        """ returns ordered list of alert objects
+        latest timestamp first, if tied then highest startTimeStamp, if tied then highest highVolChange"""
         return sorted(cls._alerts.values(), 
             key=lambda a: (-int(a.timestamp), -int(a.startTimestamp), -float(a.highVolChange.rstrip('%'))))
+    
     @classmethod
     def removeOldAlerts(cls, cutoffTime):
+        """removes alerts older than cutofftime (unix timestamp)"""
         removeIDs = []
         for a in cls._alerts:
             if int(cls._alerts[a].timestamp) < cutoffTime:
                 removeIDs.append(a)
         for id in removeIDs:
             del cls._alerts[id]
+    
     @classmethod
     def alertExists(cls,id):
+        """returns true if alert mathching id exists"""
         return id in cls._alerts
-class signals(QObject):
-    #indicates new price update. Includes unix timestamp of last update
+class signals(QObject): #organize this better
     newUpdate = pyqtSignal(int)
-    #indicates new alerts.  
     newAlerts = pyqtSignal(list, int)
     newItem = pyqtSignal(str)
-    graphReady = pyqtSignal(object)
+    
+
     #GUI updating requests
+    graphReady = pyqtSignal(object)
     progBarChange = pyqtSignal(int)
     loadTextChange = pyqtSignal(str)
+
+
     buildDBComplete = pyqtSignal()
     priceHistoryComplete = pyqtSignal()
     killPriceLoop = pyqtSignal()
@@ -237,6 +260,7 @@ class Worker(QRunnable):
         self.statusString = status
 
 def get_active_workers_snapshot():
+    """Returns a snapshot of currently active workers as a list"""
     with active_workers_lock:
         return list(active_workers)
 class MainWindow(QMainWindow):
