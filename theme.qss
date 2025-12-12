@@ -1,105 +1,116 @@
-QFrame#filter_config_frame{
-	background-color: #5488cf;
-	color: #F9F6EE;
-	border-width: 3px;
-	border-color: #a4a7b6;
-}
-QFrame#alert_config_frame{
-	background-color: #999ea5;
-}
 /* top bar */
 #header_bar{
-	border-bottom-width: 2px;
-	border-style: ridge;
-	background-color: #131418;
-	
+	background-color: rgba(255, 255, 255, .065);
+}
+#search_bar{
+	background-color: rgba(255, 255, 255, 0.075);
+	border-radius: 6px;
+	border-width: 0px;
+	color: #f5f5f5;
+}
+#header_info_frame{
+	background-color: rgba(255, 255, 255, 0.075);
+	border-radius: 6px;
+	border-width: 0px;
 }
 #icon_area{
-	border-bottom-width: 2px;
-	border-style: ridge;
-	background-color: #131418;
+	background-color: rgba(255, 255, 255, .065);
 }
 
 /* side bar */
 #sidebar_widget {
-	background-color: #202127;
+	background-color: rgba(255, 255, 255, 0.065);
+}
+QPushButton{
+	color: #f5f5f5;
+	background-color: rgba(0, 0, 0, 0);
+	font: bold 14px;
+}
+QPushButton:checked{
+	color: #f5f5f5;
+	background-color: rgba(255, 255, 255, 0.2);
+	font: bold 14px;
+}
+QPushButton:disabled{
+	color: #000000;
+	font: bold 14px;
 }
 
 /* center frame */
 #central_widget {
-	background-color: #34373a;
+	background-color: #0f0f11;
 }
 
+QWidget#graph_info_widget{
+	border-radius: 10px;
+	background-color: rgba(255, 255, 255, 0.04);
+}
+QWidget#main_graph_widget{
+	border-radius: 10px;
+	background-color: rgba(255, 255, 255, 0.04);
+}
+
+#filter_config_frame{
+	border-radius: 10px;
+	background-color: rgba(255, 255, 255, 0.04);
+}
+
+#alert_config_frame{
+	border-radius: 10px;
+	background-color: rgba(255, 255, 255, 0.04);
+}
 /* history sidebar */
 #history_list {
 	background-color: #34373a;
 }
 
 /* alert area and table config */
-QTableWidget#alert_list{
-	background-color: #353741;
-	border: 1px solid #000d16;
-	gridline-color: rgba(255,255,255,10);
+#alert_area{
+	background-color: rgba(255, 255, 255, 0.02);
+}
+#alert_scroll_area{
+	background-color: #0f0f11;
+}
+QTableWidget{
+	background-color: rgba(255, 255, 255, 0.0);
+	selection-background-color: rgba(0, 0, 0, 0.09);
+	selection-color: #f5f5f5;
+	border-width: 0px;
 }
 QTableWidget::item{
-	background-color: #202127;
-	border: 1px solid #000d16;
-	gridline-color: rgba(255,255,255,10);
+	background-color: rgba(255, 255, 255, 0.02);
 }
 QHeaderView{
-	border: 1px solid #131418;
+	background-color: #0f0f11;
 }
 QHeaderView::section{
 	color: #f5f5f5; /* header text color */
-	background-color: #131418;
-	border: 1px solid #000d16;
-}
-QLineEdit{
-	color: #f5f5f5;
-}
-QLineEdit#search_bar{
-	background-color: rgba(255, 255, 255, 0.4);
+	background-color: rgba(255, 255, 255, 0.04);
+    border: 1px outset rgba(255, 255, 255, 0.03);
+	border-bottom: 2px solid rgba(255, 255, 255, 0.03);
+	border-top: None;
+    padding: 4px;             
 }
 
-QPushButton{
+QLineEdit{
+	background-color: rgba(255, 255, 255, 0.06);
+	border-radius: 4px;
+	border-width: 0px;
 	color: #f5f5f5;
-	background-color: rgba(0, 0, 0, 0);
-	border-style: ridge;
-	border-radius: 0px;
-	border-color: rgba(255, 255, 255, 40);
-	border-top-width: 1px;
-	border-bottom-width: 1px;
-	font: bold 14px;
 }
-QPushButton:checked{
+
+/* Alert page setup */
+#alert_page_splitter::handle{
+	background-color: #0f0f11;
+}
+#alert_page_alert_frame{
+	background-color: rgba(255, 255, 255, 0.04);
+}
+#alert_page_quickAlerts_frame{
+	background-color: rgba(255, 255, 255, 0.04);
+}
+#page_quickAlerts_list::item{
 	color: #f5f5f5;
-	background-color: rgba(255, 255, 255, 10);
-	border-style:inset;
-	border-radius: 0px;
-	border-color: rgba(255, 255, 255, 40);
-	border-top-width: 1px;
-	border-bottom-width: 1px;
-	font: bold 14px;
-}
-QPushButton:disabled{
-	color: #000000;
-	background-color: rgba(0, 0, 0, 20);
-	border-style:inset;
-	border-radius: 0px;
-	border-color: rgba(255, 255, 255, 40);
-	border-top-width: 1px;
-	border-bottom-width: 1px;
-	font: bold 14px;
-}
-QPushButton#config_button{
-	border-top-width: 2px;
-	border-bottom-width: 2px;
-}
-QPushButton#trends_button{
-	border-bottom-width: 2px;
-}
-QPushButton#graph_button{
-	border-top-width: 0px;
 }
 
 QCheckBox{
@@ -110,13 +121,4 @@ QLabel{
 	font: 14px;
 }
 
-QFrame#graph_info_frame{
-	border-width: 2px;
-	border-style:inset;
-	border-color: rgba(255, 255, 255, 40);
-}
-QFrame#main_graph_frame{
-	border-width: 2px;
-	border-style: inset;
-	border-color: rgba(255, 255, 255, 40);
-}
+

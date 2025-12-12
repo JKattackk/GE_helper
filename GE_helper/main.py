@@ -25,14 +25,15 @@ from dateutil import tz
 itemListURL = "https://chisel.weirdgloop.org/gazproj/gazbot/os_dump.json"
 priceHistory5mURL = url = "https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=5m&id="
 itemLookupURL = "https://www.ge-tracker.com/item/"
-
+itemIconURL = "https://secure.runescape.com/m=itemdb_rs/obj_sprite.gif?id="
+latestURL = "https://prices.runescape.wiki/api/v1/osrs/latest"
 headers = {
     'User-Agent': 'GE price trend tracking wip discord @kat6541'
 }
 
 filteredItemListValues = "(id INTEGER PRIMARY KEY, itemName, buyLimit, lowPrice, highPrice, value, highAlch, lowVolume, highVolume, lowPriceChange, highPriceChange, lowVolumeChange, highVolumeChange, timestamp, tracked)"
 priceHistory5mValues = "(timeStamp INTEGER NOT NULL PRIMARY KEY, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume)"
-latestURL = "https://prices.runescape.wiki/api/v1/osrs/latest"
+
 
 alertConfigFile = "cfg/alertConfig.json"
 filterConfigFile = "cfg/filterConfig.json"
@@ -177,9 +178,6 @@ class Alert:
     @classmethod
     def alertExists(cls,id):
         return id in cls._alerts
-    
-        
-    
 class signals(QObject):
     #indicates new price update. Includes unix timestamp of last update
     newUpdate = pyqtSignal(int)
@@ -199,6 +197,7 @@ class signals(QObject):
     newProgressUpdate = pyqtSignal(object)
     inProgressItemComplete = pyqtSignal(object)
     newUpdate = pyqtSignal(int)
+    newQuickAlerts = pyqtSignal(list)
 
 class Worker(QRunnable):
     """Worker thread."""
@@ -253,12 +252,6 @@ class MainWindow(QMainWindow):
             super(MainWindow, self).__init__()
             self.ui = Ui_MainWindow()
             self.ui.setupUi(self)
-            # Ensure these frames accept QSS-painted backgrounds
-            for name in ("filter_config_frame", "alert_config_frame"):
-                w = getattr(self.ui, name, None)
-                if w is not None:
-                    w.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-                    w.setAutoFillBackground(True)
             #status indicator setup
             try:
                 placeholder = self.ui.indicator_widget  # placeholder created by .ui
@@ -350,6 +343,8 @@ class MainWindow(QMainWindow):
         self.ui.stylesheet_button.clicked.connect(self.updateStylesheet)
         
         self.ui.alert_list.itemDoubleClicked.connect(self.onAlertDoubleClick)
+        self.ui.page_alert_list.itemDoubleClicked.connect(self.onAlertDoubleClick)
+        self.ui.page_quickAlerts_list.itemDoubleClicked.connect(self.onAlertDoubleClick)
         #loading screen control
         self.signals.progBarChange.connect(self.updateBar)
         self.signals.loadTextChange.connect(self.updateLoadingText)
@@ -366,6 +361,7 @@ class MainWindow(QMainWindow):
         self.signals.newProgressUpdate.connect(self.updateStatus)
         self.signals.inProgressItemComplete.connect(self.removeInProgressItem)
         self.signals.newUpdate.connect(self.newUpdate)
+        self.signals.newQuickAlerts.connect(self.updateQuickAlerts)
 
     def updateStylesheet(self):
         print("updating stylesheet")
@@ -378,19 +374,36 @@ class MainWindow(QMainWindow):
 
     def setupAlertList(self):
         self.ui.alert_list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.ui.page_alert_list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.ui.page_quickAlerts_list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
+        self.ui.alert_list.horizontalHeader().setFixedHeight(32)
+
+        self.ui.page_quickAlerts_list.horizontalHeader().setFixedHeight(32)
+        self.ui.page_alert_list.horizontalHeader().setFixedHeight(40)
+        
     def onAlertDoubleClick(self, item):
         self.ui.alert_list.clearSelection()
         if item.column() == 0:
             itemID = item.text().split(":")[0]
             self.signals.newItem.emit(itemID)
             self.ui.main_stack_widget.setCurrentIndex(1)
+            self.ui.graph_button.setChecked(True)
 
     def newUpdate(self, timestamp):
         time = datetime.fromtimestamp(timestamp)
         self.ui.last_update_label.setText("Last Updated: " + datetime.strftime(time, "%H:%M"))
         self.updateAlerts(timestamp)
 
+    def updateQuickAlerts(self, quickAlerts):
+        self.ui.page_quickAlerts_list.setRowCount(0)
+        for alert in quickAlerts:
+            row = self.ui.page_quickAlerts_list.rowCount()
+            self.ui.page_quickAlerts_list.insertRow(row)
+            self.ui.page_quickAlerts_list.setItem(row, 0, QTableWidgetItem(f"{alert['id']}: {alert['name']}"))
+            self.ui.page_quickAlerts_list.setItem(row, 1, QTableWidgetItem(alert["highPrice"]))
+            self.ui.page_quickAlerts_list.setItem(row, 2, QTableWidgetItem(alert["highPriceChange"]))
+            self.ui.page_quickAlerts_list.setItem(row, 3, QTableWidgetItem(alert["highTime"]))
 
     def addInProgressItem(self, worker):
         self.inProgressItems.append(worker)
@@ -753,20 +766,37 @@ class MainWindow(QMainWindow):
             for i in range(len(alerts)):
                 a = alerts[i]
                 self.ui.alert_list.insertRow(i)
+                self.ui.page_alert_list.insertRow(i)
+
                 self.ui.alert_list.setItem(i, 0, QTableWidgetItem(f"{a.id}: {a.name} "))
+                self.ui.page_alert_list.setItem(i, 0, QTableWidgetItem(f"{a.id}: {a.name} "))
+
                 self.ui.alert_list.setItem(i, 1, QTableWidgetItem(a.highPriceChange))
+                self.ui.page_alert_list.setItem(i, 1, QTableWidgetItem(a.highPriceChange))
+
                 self.ui.alert_list.setItem(i, 2, QTableWidgetItem(a.lowPriceChange))
+                self.ui.page_alert_list.setItem(i, 2, QTableWidgetItem(a.lowPriceChange))
+
                 self.ui.alert_list.setItem(i, 3, QTableWidgetItem(a.highVolChange))
+                self.ui.page_alert_list.setItem(i, 3, QTableWidgetItem(a.highVolChange))
+
                 self.ui.alert_list.setItem(i, 4, QTableWidgetItem(a.lowVolChange))
+                self.ui.page_alert_list.setItem(i, 4, QTableWidgetItem(a.lowVolChange))
+
                 time = datetime.fromtimestamp(int(a.timestamp))
                 self.ui.alert_list.setItem(i, 5, QTableWidgetItem(datetime.strftime(time, "%H:%M")))
+                self.ui.page_alert_list.setItem(i, 5, QTableWidgetItem(datetime.strftime(time, "%H:%M")))
+
                 if int(a.timestamp)!= updateTime: # old alert coloring
                     for j in range(self.ui.alert_list.columnCount()):
                         self.ui.alert_list.item(i, j).setForeground(QBrush(QColor(255, 254, 178)))
+                        self.ui.page_alert_list.item(i, j).setForeground(QBrush(QColor(255, 254, 178)))
                 else:
                     for j in range(self.ui.alert_list.columnCount()): # new alert coloring
                         self.ui.alert_list.item(i, j).setForeground(QBrush(QColor(229, 137, 255)))
+                        self.ui.page_alert_list.item(i, j).setForeground(QBrush(QColor(229, 137, 255)))
         self.ui.alert_list.setRowCount(len(alerts))
+        self.ui.page_alert_list.setRowCount(len(alerts))
 
     def rebuildDBPressed(self):
         self.ui.splash_stacked.setCurrentIndex(1)
@@ -896,9 +926,9 @@ class MainWindow(QMainWindow):
                 cursor = database.cursor()
                 cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
                 trackedIDs = cursor.execute('SELECT id from filteredDB WHERE tracked=TRUE').fetchall()
+                quickAlerts = []
                 for id in trackedIDs:
                     id_str = ''.join(str(value) for value in id)
-                    name = cursor.execute(f'SELECT itemName from filteredDB WHERE id = {id_str}').fetchall()
                     highPrice = data.get(id_str).get("high")
                     tableName = "priceHistory5m.itemID" + id_str
                     oneDayAvg = self.getOneDayAvg(database, tableName, lastUpdate)
@@ -906,8 +936,14 @@ class MainWindow(QMainWindow):
                         highPriceChange = (highPrice / oneDayAvg.get("avgHighPrice"))*100 - 100
                     except:
                         highPriceChange = 0
-                    if highPriceChange < -50:
-                        print(f"{id_str}: {name} highPrice: {highPrice}  Change: {highPriceChange}")
+                    if highPriceChange < -60:
+                        name = cursor.execute(f'SELECT itemName from filteredDB WHERE id = {id_str}').fetchall()[0][0]
+                        timestamp = data.get(id_str).get("highTime")
+                        highTime = datetime.fromtimestamp(int(timestamp))
+                        quickAlerts.append({"id": id_str, "name": name, "highPrice": f"{highPrice}", 
+                                            "highPriceChange": f"{highPriceChange:.2f}%", "highTime": datetime.strftime(highTime, "%H:%M")})
+                        print(f"{id_str}: {name} highPrice: {f"{highPrice}"}  Change: {f"{highPriceChange:.2f}%"}")
+                        self.signals.newQuickAlerts.emit(quickAlerts)
             except Exception as e:
                 print(e)
             database.close()
