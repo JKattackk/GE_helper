@@ -302,13 +302,13 @@ class ContextMenu(QFrame):
         mute_time = 1*60*60
         self.timeSelected(mute_time)
     def h_4_button_clicked(self):
-        mute_time = 1*60*4
+        mute_time = 1*60*60*4
         self.timeSelected(mute_time)
     def h_8_button_clicked(self):
-        mute_time = 1*60*8
+        mute_time = 1*60*60*8
         self.timeSelected(mute_time)
     def d_1_button_clicked(self):
-        mute_time = 1*60*24
+        mute_time = 1*60*60*24
         self.timeSelected(mute_time)
     def inf_button_clicked(self):
         mute_time = -1
