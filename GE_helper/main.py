@@ -18,21 +18,21 @@ from dateutil import tz
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
-
 from PyQt6.QtSql import *
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtGui import QColor, QPainter, QBrush, QPen, QFontDatabase, QMouseEvent, QPaintEvent, QEnterEvent
+from PyQt6.QtGui import QColor, QPainter, QBrush, QPen, QFontDatabase, QPaintEvent, QEnterEvent, QKeyEvent, QFocusEvent, QCursor
 from output import Ui_MainWindow
-
-
+from contextMenuOutput import Ui_Form
 
 #pyuic6 -o .\GE_helper\output.py .\GE_helper\newUI.ui
+#pyuic6 -o .\GE_helper\contextMenuOutput.py .\GE_helper\muteDialog.ui
 
 # URLS for API calls
 itemListURL = "https://chisel.weirdgloop.org/gazproj/gazbot/os_dump.json"
-priceHistory5mURL = url = "https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=5m&id="
+priceHistory5mURL =  "https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=5m&id="
+latest5mURL = "https://prices.runescape.wiki/api/v1/osrs/5m"
 itemLookupURL = "https://www.ge-tracker.com/item/"
 itemIconURL = "https://secure.runescape.com/m=itemdb_rs/obj_sprite.gif?id="
 latestURL = "https://prices.runescape.wiki/api/v1/osrs/latest"
@@ -47,6 +47,8 @@ priceHistory5mValues = "(timeStamp INTEGER NOT NULL PRIMARY KEY, avgLowPrice, av
 # config file paths
 alertConfigFile = "cfg/alertConfig.json"
 filterConfigFile = "cfg/filterConfig.json"
+quickAlertMuteFile = "cfg/quickAlertMute.json"
+alertMuteFile = "cfg/alertMute.json"
 
 ## default item filter values
 def_minBuyLimitValue = 2000000
@@ -81,9 +83,17 @@ def textToInt(string):
                 return(num * 10**3)
             case 'b':
                 return(num * 10**9)
+            case 's':
+                return(num)
+            case 'm':
+                return(num*60)
+            case 'h':
+                return(num*60*60)
+            case 'd':
+                return(num*60*60*24)
             case default:
                 raise ValueError
-            
+
 class StatusIndicator(QWidget):
     """Circular indicator widget for showing app status
      Main status indicated via color, tooltip shows details on hover"""
@@ -199,6 +209,13 @@ class Alert:
     def alertExists(cls,id):
         """returns true if alert mathching id exists"""
         return id in cls._alerts
+    @classmethod
+    def del_alert(cls, id):
+        try:
+            del cls._alerts[id]
+        except Exception:
+            pass
+
 class signals(QObject): #organize this better
     newUpdate = pyqtSignal(int)
     newAlerts = pyqtSignal(list, int)
@@ -221,7 +238,142 @@ class signals(QObject): #organize this better
     inProgressItemComplete = pyqtSignal(object)
     newUpdate = pyqtSignal(int)
     newQuickAlerts = pyqtSignal(list)
+class ContextMenu(QFrame):
+    """Custom context menu widget that appears at cursor position.
+    Emits actionSelected(action_name) when user clicks an option.
+    Closes on outside clicks, Escape key, or action selection.
+    """
+    new_quickAlert_mute = pyqtSignal(str, int)
+    new_alert_mute = pyqtSignal(str, int)
+    def __init__(self, parent = None, table=None, item_id = None):
+        super().__init__(parent)
+        self.ui = Ui_Form()
+        self.ui.setupUi(self)
+        self.setup_signals()
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
+
+        self.item_id = item_id
+
+
+        parentTable = table.objectName()
+        if parentTable == "alert_list" or parentTable == "page_alert_list":
+            self.ui.alerts_check.setChecked(True)
+        elif parentTable == "page_quickAlerts_list":
+            self.ui.quickAlerts_check.setChecked(True)
+
+        self._global_filter_installed = False
+
+    def setup_signals(self):
+        self.ui.m_30_button.clicked.connect(self.m_30_button_clicked)
+        self.ui.h_1_button.clicked.connect(self.h_1_button_clicked)
+        self.ui.h_4_button.clicked.connect(self.h_4_button_clicked)
+        self.ui.h_8_button.clicked.connect(self.h_8_button_clicked)
+        self.ui.d_1_button.clicked.connect(self.d_1_button_clicked)
+        self.ui.inf_button.clicked.connect(self.inf_button_clicked)
+
+        self.ui.mute_button.clicked.connect(self.custom_time_entered)
+
+        self.ui.custom_time_entry.returnPressed.connect(self.custom_time_entered)
+
+    def m_30_button_clicked(self):
+        mute_time = 30*60
+        self.timeSelected(mute_time)
+    def h_1_button_clicked(self):
+        mute_time = 1*60*60
+        self.timeSelected(mute_time)
+    def h_4_button_clicked(self):
+        mute_time = 1*60*4
+        self.timeSelected(mute_time)
+    def h_8_button_clicked(self):
+        mute_time = 1*60*8
+        self.timeSelected(mute_time)
+    def d_1_button_clicked(self):
+        mute_time = 1*60*24
+        self.timeSelected(mute_time)
+    def inf_button_clicked(self):
+        mute_time = -1
+        self.timeSelected(mute_time)
+
+    def custom_time_entered(self):
+        enteredString = self.ui.custom_time_entry.text()
+        if enteredString == None:
+            mute_time = -1
+            self.timeSelected(mute_time)
+        else:
+            mute_time = textToInt(enteredString)
+            if mute_time == None:
+                print("no valid time entered")
+            else:
+                self.timeSelected(mute_time)
+
+    def timeSelected(self, mute_time):
+        if not mute_time == -1:
+            if self.ui.quickAlerts_check.isChecked():
+                self.new_quickAlert_mute.emit(self.item_id, mute_time)
+            if self.ui.alerts_check.isChecked():
+                self.new_alert_mute.emit(self.item_id, mute_time)
+        self.close()
+    
+    def keyPressEvent(self, event: QKeyEvent):
+        """Close on Escape."""
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()
+        else:
+            super().keyPressEvent(event)
+    
+    def eventFilter(self, obj, event):
+        """Detect clicks outside the menu and close."""
+        # Only process mouse button press events
+        if event.type() == QEvent.Type.MouseButtonPress:
+            # Check if the click was outside this menu
+            menu_geo = self.geometry()
+            pos = QCursor.pos()
+
+            # If click is outside menu bounds, close it
+            if not menu_geo.contains(self.parent().mapFromGlobal(pos)):
+                self.close()
+                return False  # let the event continue
+        
+        return super().eventFilter(obj, event)
+    
+    def hideEvent(self, event):
+        """Uninstall the global event filter when menu closes."""
+        if self._global_filter_installed:
+            QApplication.instance().removeEventFilter(self)
+            self._global_filter_installed = False
+    
+        super().hideEvent(event)
+    
+    def show_at_cursor(self):
+        """Show the menu at the current cursor position."""
+        pos = self.parent().mapFromGlobal(QCursor.pos())
+        self.move(pos.x(), pos.y())
+        
+
+        # Ensure the menu stays on-screen (adjust if it goes off the right/bottom edge)
+        app_geo = self.parent().size()
+        menu_geo = self.size() # includes window frame
+        
+        # Check if menu extends past right edge
+        if menu_geo.width() + pos.x()  > app_geo.width():
+            print("out right")
+            self.move(-menu_geo.width() + app_geo.width(), pos.y())
+        
+        # Check if menu extends past bottom edge
+        if menu_geo.height() + pos.y() > app_geo.height():
+            print("out bottom")
+            self.move(pos.x(), -menu_geo.height() + app_geo.height())
+
+        if not self._global_filter_installed:
+            QApplication.instance().installEventFilter(self)
+            self._global_filter_installed = True
+            
+        self.setFocus()
+        self.raise_()
+        self.show()
+        self.activateWindow()
 class Worker(QRunnable):
     """Worker thread."""
     def __init__(self, fn, *args, **kwargs):
@@ -269,6 +421,23 @@ class MainWindow(QMainWindow):
         try:
             self.inProgressItems = []
             self.localList = []
+            self.alertMutes = {}
+            self.quickAlertMutes = {}
+            
+            if os.path.isfile(quickAlertMuteFile):
+                try:
+                    with open(quickAlertMuteFile, "r") as f:
+                        self.quickAlertMutes = json.load(f)
+                except Exception:
+                    pass
+            if os.path.isfile(alertMuteFile):
+                try:
+                    with open(alertMuteFile, "r") as f:
+                        self.alertMutes = json.load(f)
+                except Exception:
+                    pass
+            
+            self.context_menu = None
             self.threadpool = QThreadPool()
             thread_count = self.threadpool.maxThreadCount()
             print(f"Multithreading with maximum {thread_count} threads")
@@ -276,6 +445,10 @@ class MainWindow(QMainWindow):
             super(MainWindow, self).__init__()
             self.ui = Ui_MainWindow()
             self.ui.setupUi(self)
+            
+            self.ui.page_quickAlerts_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            self.ui.page_alert_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            self.ui.alert_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
             #status indicator setup
             try:
                 placeholder = self.ui.indicator_widget  # placeholder created by .ui
@@ -373,6 +546,12 @@ class MainWindow(QMainWindow):
         self.signals.progBarChange.connect(self.updateBar)
         self.signals.loadTextChange.connect(self.updateLoadingText)
 
+        # table context menus
+        self.ui.page_quickAlerts_list.customContextMenuRequested.connect(self.show_context_menu)
+        self.ui.page_alert_list.customContextMenuRequested.connect(self.show_context_menu)
+        self.ui.alert_list.customContextMenuRequested.connect(self.show_context_menu)
+
+
         self.signals.buildDBComplete.connect(self.startPriceLoop)
         self.signals.priceHistoryComplete.connect(self.priceHistoryComplete)
         self.signals.killPriceLoop.connect(self.loopWorker.kill)
@@ -395,6 +574,91 @@ class MainWindow(QMainWindow):
                 app.setStyleSheet(theme_str)
         except Exception as e:
             print(f"Error updating stylesheet: {e}")
+
+    def show_context_menu(self, pos: QPoint):
+        sender = self.sender()
+        if  isinstance(sender, QTableWidget):
+            index = sender.indexAt(pos)
+            if index.isValid():
+                itemString = sender.itemAt(index.row(), 0).text()
+                print(f"context menu requested for {itemString}")
+                if self.context_menu is not None:
+                    self.context_menu.close()
+                # create new context menu with actions
+                try:
+                    item_id = itemString.split(":")[0].strip()
+                    self.context_menu = ContextMenu(self, table = sender, item_id = item_id)
+                    self.context_menu.new_quickAlert_mute.connect(self.add_quickAlert_block)
+                    self.context_menu.new_alert_mute.connect(self.add_alert_block)
+                    self.context_menu.show_at_cursor()
+                except Exception as e:
+                    print(e)
+    
+    def add_alert_block(self, item_id: str, mute_time: int):
+        """Add to to or update alert block list"""
+        try:
+            print(item_id)
+            print(mute_time)
+            if item_id in self.alertMutes:
+                del self.alertMutes[item_id]
+            if mute_time > 0:
+                timestamp = int(time.time())
+                block_expiry = timestamp + mute_time
+                self.alertMutes[item_id] = block_expiry
+                self.remove_blocked_alerts()
+        except Exception as e:
+            print(e)
+        try:
+            with open(alertMuteFile, "w") as f:
+                json.dump(self.alertMutes, f)
+                print("alert mutes saved")
+        except Exception as e:
+            print(e)
+    def add_quickAlert_block(self, item_id: str, mute_time: int):
+        """Add to to or update alert block list"""
+        try:
+            print(item_id)
+            print(mute_time)
+            if item_id in self.quickAlertMutes:
+                del self.quickAlertMutes[item_id]
+            if mute_time > 0:
+                timestamp = int(time.time())
+                block_expiry = timestamp + mute_time
+                self.quickAlertMutes[item_id] = block_expiry
+                self.remove_blocked_quickAlerts()
+        except Exception as e:
+            print(e)
+        try:
+            with open(quickAlertMuteFile, "w") as f:
+                json.dump(self.quickAlertMutes, f)
+                print("quick alert mutes saved")
+        except Exception as e:
+            print(e)
+
+    def remove_blocked_alerts(self):
+            #both alert tables should always have the same content
+        num_rows = self.ui.alert_list.rowCount()
+        for i in reversed(range(num_rows)):
+            itemString = self.ui.alert_list.item(i, 0).text()
+            id_str = itemString.split(':')[0]
+            if id_str in self.alertMutes:
+                if time.time() > self.alertMutes[id_str]:
+                    del self.alertMutes[id_str]
+                else:
+                    Alert.del_alert(id_str)
+                    self.ui.alert_list.removeRow(i)
+                    self.ui.page_alert_list.removeRow(i)
+
+    def remove_blocked_quickAlerts(self):
+        num_rows = self.ui.page_quickAlerts_list.rowCount()
+        for i in reversed(range(num_rows)):
+            itemString = self.ui.page_quickAlerts_list.item(i, 0).text()
+            id_str = itemString.split(':')[0]
+            if id_str in self.quickAlertMutes:
+                if time.time() > self.quickAlertMutes[id_str]:
+                    del self.quickAlertMutes[id_str]
+                else:
+                    self.ui.page_quickAlerts_list.removeRow(i)
 
     def setupAlertList(self):
         self.ui.alert_list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -960,14 +1224,28 @@ class MainWindow(QMainWindow):
                         highPriceChange = (highPrice / oneDayAvg.get("avgHighPrice"))*100 - 100
                     except:
                         highPriceChange = 0
+
+                    # quick alert condition
                     if highPriceChange < -60:
-                        name = cursor.execute(f'SELECT itemName from filteredDB WHERE id = {id_str}').fetchall()[0][0]
-                        timestamp = data.get(id_str).get("highTime")
-                        highTime = datetime.fromtimestamp(int(timestamp))
-                        quickAlerts.append({"id": id_str, "name": name, "highPrice": f"{highPrice}", 
-                                            "highPriceChange": f"{highPriceChange:.2f}%", "highTime": datetime.strftime(highTime, "%H:%M")})
-                        print(f"{id_str}: {name} highPrice: {f"{highPrice}"}  Change: {f"{highPriceChange:.2f}%"}")
-                        self.signals.newQuickAlerts.emit(quickAlerts)
+                        print(f"quick alert {id_str}")
+                        if id_str in self.quickAlertMutes:
+                            if time.time() > self.quickAlertMutes[id_str]:
+                                del self.quickAlertMutes[id_str]
+                                try:
+                                    with open(quickAlertMuteFile, "w") as f:
+                                        json.dump(self.quickAlertMutes, f)
+                                        print("quick alert mutes saved")
+                                except Exception as e:
+                                    print(e)
+                        if not id_str in self.quickAlertMutes:
+                            name = cursor.execute(f'SELECT itemName from filteredDB WHERE id = {id_str}').fetchall()[0][0]
+                            timestamp = data.get(id_str).get("highTime")
+                            highTime = datetime.fromtimestamp(int(timestamp))
+                            quickAlerts.append({"id": id_str, "name": name, "highPrice": f"{highPrice}", 
+                                                "highPriceChange": f"{highPriceChange:.2f}%", "highTime": datetime.strftime(highTime, "%H:%M")})
+                            print(f"{id_str}: {name} highPrice: {f"{highPrice}"}  Change: {f"{highPriceChange:.2f}%"}")
+                self.signals.newQuickAlerts.emit(quickAlerts)
+                            
             except Exception as e:
                 print(e)
             database.close()
@@ -975,9 +1253,7 @@ class MainWindow(QMainWindow):
                 database = sqlite3.connect('database.db')
                 cursor = database.cursor()
                 cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
-                alerts = []
-                url = "https://prices.runescape.wiki/api/v1/osrs/5m"
-                response = json.loads(requests.get(url, headers = headers).text)
+                response = json.loads(requests.get(latest5mURL, headers = headers).text)
                 if response.get('timestamp') > lastUpdate:
                     lastUpdate = response.get('timestamp')
                     print(lastUpdate)
@@ -1045,16 +1321,25 @@ class MainWindow(QMainWindow):
                                     
                                     # alert conditions
                                     if (lowPriceChange <= -abs(minLowPriceChange) or highPriceChange <= -abs(minHighPriceChange)) and (lowVolChange >= minLowVolChange or highVolChange >= minHighVolChange):
-                                        command = "SELECT itemName FROM filteredDB WHERE id = ?"
-                                        name = cursor.execute(command, id).fetchone()[0]
-
-                                        if Alert.alertExists(id[0]):
-                                            Alert.updateAlert(id= id[0], name = name, lowPriceChange = lowPriceChange, highPriceChange = highPriceChange, 
+                                        if id_str in self.alertMutes:
+                                            if time.time() > self.alertMutes[id_str]:
+                                                del self.alertMutes[id_str]
+                                                try:
+                                                    with open(alertMuteFile, "w") as f:
+                                                        json.dump(self.alertMutes, f)
+                                                        print("alert mutes saved")
+                                                except Exception as e:
+                                                    print(e)
+                                        if not id_str in self.alertMutes:
+                                            command = "SELECT itemName FROM filteredDB WHERE id = ?"
+                                            name = cursor.execute(command, id).fetchone()[0]
+                                            if Alert.alertExists(id[0]):
+                                                Alert.updateAlert(id= id[0], name = name, lowPriceChange = lowPriceChange, highPriceChange = highPriceChange, 
+                                                        lowVolChange = lowVolChange, highVolChange = highVolChange, timestamp = lastUpdate)
+                                            else:
+                                                a = Alert(id= id[0], name = name, lowPriceChange = lowPriceChange, highPriceChange = highPriceChange, 
                                                     lowVolChange = lowVolChange, highVolChange = highVolChange, timestamp = lastUpdate)
-                                        else:
-                                            a = Alert(id= id[0], name = name, lowPriceChange = lowPriceChange, highPriceChange = highPriceChange, 
-                                                lowVolChange = lowVolChange, highVolChange = highVolChange, timestamp = lastUpdate)
-                                        print(f"{name}: low price {lowPriceChange}%, high price {highPriceChange}%, low volume {lowVolChange}%, high volume {highVolChange}%, timeStamp {lastUpdate}")
+                                            print(f"{name}: low price {lowPriceChange}%, high price {highPriceChange}%, low volume {lowVolChange}%, high volume {highVolChange}%, timeStamp {lastUpdate}")
                     self.signals.newUpdate.emit(lastUpdate)
                     database.commit()
                     database.close()
