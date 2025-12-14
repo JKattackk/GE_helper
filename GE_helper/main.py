@@ -62,7 +62,7 @@ def_volChangePercent = 100
 active_workers = weakref.WeakSet()
 active_workers_lock = threading.Lock()
 
-def textToInt(string):
+def textToVal(string):
     """Attempts to convert strings to integers, allowing suffixed k, m, and b for thousand, milliod, and billion
     Used in config input parsing"""
     try:
@@ -83,6 +83,24 @@ def textToInt(string):
                 return(num * 10**3)
             case 'b':
                 return(num * 10**9)
+            case default:
+                raise ValueError
+
+def textToTime(string):
+    """Attempts to convert strings to integers, allowing suffixed k, m, and b for thousand, milliod, and billion
+    Used in config input parsing"""
+    try:
+        return int(string)
+    except:
+        endChar = string[-1].casefold()
+        string = string[:-1]
+        try:
+            num = int(string)
+        except Exception as e:
+            print("invalid input: ")
+            print(e)
+            raise ValueError
+        match endChar:
             case 's':
                 return(num)
             case 'm':
@@ -302,7 +320,7 @@ class ContextMenu(QFrame):
             mute_time = -1
             self.timeSelected(mute_time)
         else:
-            mute_time = textToInt(enteredString)
+            mute_time = textToTime(enteredString)
             if mute_time == None:
                 print("no valid time entered")
             else:
@@ -1381,10 +1399,10 @@ class MainWindow(QMainWindow):
                 minHourlyVolume = self.ui.mhv_line.text()
             
             try:
-                minBuyLimitValue = textToInt(minBuyLimitValue)
-                maxPrice = textToInt(maxPrice)
-                minHourlyThroughput = textToInt(minHourlyThroughput)
-                minHourlyVolume = textToInt(minHourlyVolume)
+                minBuyLimitValue = textToVal(minBuyLimitValue)
+                maxPrice = textToVal(maxPrice)
+                minHourlyThroughput = textToVal(minHourlyThroughput)
+                minHourlyVolume = textToVal(minHourlyVolume)
             except Exception as e:
                 print("invalid input: ")
                 print(e)
@@ -1478,10 +1496,10 @@ class MainWindow(QMainWindow):
         onlyHighDrops = self.ui.high_price_drop_check.isChecked()
         
         try:
-            minLowPriceChange = textToInt(minLowPriceChange)
-            minHighPriceChange = textToInt(minHighPriceChange)
-            minLowVolChange = textToInt(minLowVolChange)
-            minHighVolChange = textToInt(minHighVolChange)
+            minLowPriceChange = textToVal(minLowPriceChange)
+            minHighPriceChange = textToVal(minHighPriceChange)
+            minLowVolChange = textToVal(minLowVolChange)
+            minHighVolChange = textToVal(minHighVolChange)
         except Exception as e:
             print("invalid input: ")
             print(e)
