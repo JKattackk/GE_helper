@@ -376,12 +376,10 @@ class ContextMenu(QFrame):
         
         # Check if menu extends past right edge
         if menu_geo.width() + pos.x()  > app_geo.width():
-            print("out right")
             self.move(-menu_geo.width() + app_geo.width(), pos.y())
         
         # Check if menu extends past bottom edge
         if menu_geo.height() + pos.y() > app_geo.height():
-            print("out bottom")
             self.move(pos.x(), -menu_geo.height() + app_geo.height())
 
         if not self._global_filter_installed:
@@ -615,8 +613,7 @@ class MainWindow(QMainWindow):
     def add_alert_block(self, item_id: str, mute_time: int):
         """Add to to or update alert block list"""
         try:
-            print(item_id)
-            print(mute_time)
+            print(f"muted alerts for id {item_id} for {mute_time}s")
             if item_id in self.alertMutes:
                 del self.alertMutes[item_id]
             if mute_time > 0:
@@ -635,8 +632,7 @@ class MainWindow(QMainWindow):
     def add_quickAlert_block(self, item_id: str, mute_time: int):
         """Add to to or update alert block list"""
         try:
-            print(item_id)
-            print(mute_time)
+            print(f"muted quickAlerts for id {item_id} for {mute_time}s")
             if item_id in self.quickAlertMutes:
                 del self.quickAlertMutes[item_id]
             if mute_time > 0:
@@ -1279,8 +1275,6 @@ class MainWindow(QMainWindow):
                     try:
                         with open(alertConfigFile, "r") as f:
                             alertConfig = json.load(f)
-                            print("Using alert config")
-                            print(alertConfig)
                             minLowPriceChange = alertConfig.get("minLowPriceChange")
                             minHighPriceChange = alertConfig.get("minHighPriceChange")
                             minLowVolChange = alertConfig.get("minLowVolChange")
@@ -1745,12 +1739,10 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event):
         print("MainWindow.showEvent()")
-        traceback.print_stack(limit=10)
         super().showEvent(event)
 
     def hideEvent(self, event):
         print("MainWindow.hideEvent()")
-        traceback.print_stack(limit=10)
         super().hideEvent(event)
 
     def changeEvent(self, event):
