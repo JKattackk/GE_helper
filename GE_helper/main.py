@@ -1686,7 +1686,7 @@ class MainWindow(QMainWindow):
     def repairDB(self, repairList, worker = None):
         print("Starting DB repair...")
         itemLen = len(repairList)
-        worker.setStatusString("Updating price hisotry: 0/%d" % itemLen)
+        worker.setStatusString("Updating price history: 0/%d" % itemLen)
         self.signals.newInProgressItem.emit(worker)
         try:
             db = sqlite3.connect('database.db')
@@ -1697,6 +1697,8 @@ class MainWindow(QMainWindow):
                 if worker.is_killed:
                     print("stopping DB repair")
                     db.close()
+                    worker.setStatusString("")
+                    self.signals.inProgressItemComplete.emit(worker)
                     return None
                 tableName = "priceHistory5m.itemID" + item
                 lastEntryTime = repairList[item]
