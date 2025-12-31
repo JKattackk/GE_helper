@@ -407,10 +407,10 @@ class Worker(QRunnable):
             # register self as active
             with active_workers_lock:
                 active_workers.add(self)
-            print(f"Worker starting: {self.fn.__name__}")
+            print(f"Worker starting: {self.fn.__name__}\n")
             self.is_killed = False
             self.fn(*self.args, **self.kwargs, worker= self)
-            print(f"Worker completed: {self.fn.__name__}")
+            print(f"Worker completed: {self.fn.__name__}\n")
         except Exception as e:
             print(f"Error in worker thread: {e}")
             traceback.print_exc()
@@ -596,7 +596,7 @@ class MainWindow(QMainWindow):
         if  isinstance(sender, QTableWidget):
             index = sender.indexAt(pos)
             if index.isValid():
-                itemString = sender.itemAt(index.row(), 0).text()
+                itemString = sender.item(index.row(), 0).text()
                 print(f"context menu requested for {itemString}")
                 if self.context_menu is not None:
                     self.context_menu.close()
