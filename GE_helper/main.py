@@ -112,6 +112,37 @@ def textToTime(string):
             case default:
                 raise ValueError
 
+def net_request(self, url, worker=None):
+    try:
+        data = requests.get(url, headers=headers)
+        return data
+    except Exception as e:
+        if worker is not None:
+            status = [True, f"Failed network request to {url}: {e}"]
+            worker.updateStatus("Error", status)
+            self.signals.statusChange.emit(worker)
+        for i in range(0,5):
+            time.sleep(30)
+            try:
+                data = requests.get(url, headers=headers)
+                status = [False, ""]
+                worker.updateStatus("Error", status)
+                self.signals.statusChange.emit(worker)
+                return data
+            except Exception as e:
+                pass
+        while True:
+            # infinite while loop feels stupid
+            time.sleep(60*5)
+            try:
+                data = requests.get(url, headers=headers)
+                status = [False, ""]
+                worker.updateStatus("Error", status)
+                self.signals.statusChange.emit(worker)
+                return data
+            except Exception as e:
+                pass
+        
 class StatusIndicator(QWidget):
     """Circular indicator widget for showing app status
      Main status indicated via color, tooltip shows details on hover"""
@@ -595,7 +626,7 @@ class MainWindow(QMainWindow):
         self.signals.newAlerts.connect(self.updateAlerts)
         self.signals.alertConfigSaved.connect(self.updateConfigBoxes)
 
-        self.signals.statusChange.connect(self.updateStatus)
+        self.signals.statusChange.connect(self.updateStatusIndicator)
         
         self.signals.newUpdate.connect(self.newUpdate)
         self.signals.newQuickAlerts.connect(self.updateQuickAlerts)
@@ -725,7 +756,7 @@ class MainWindow(QMainWindow):
             self.ui.page_quickAlerts_list.setItem(row, 2, QTableWidgetItem(alert["highPriceChange"]))
             self.ui.page_quickAlerts_list.setItem(row, 3, QTableWidgetItem(alert["highTime"]))
 
-    def updateStatus(self, worker):
+    def updateStatusIndicator(self, worker):
         try:
             updatedStatus = worker.getStatus()
         except Exception as e:
@@ -1232,7 +1263,7 @@ class MainWindow(QMainWindow):
             if query.fetchone() == None:
                 command = "CREATE TABLE " + tableName + " " + priceHistory5mValues
                 cursor.execute(command)
-                response = json.loads(requests.get(priceHistory5mURL + ''.join(str(value) for value in id), headers=headers).text).get('data')
+                response = json.loads(net_request(self=self, url=(priceHistory5mURL + ''.join(str(value) for value in id)), worker=worker).text).get('data')
                 for item in response:
                     timestamp = item.get('timestamp')
                     avgHighPrice = item.get('avgHighPrice')
@@ -1271,10 +1302,7 @@ class MainWindow(QMainWindow):
         while True:
             if worker.is_killed:
                 break
-
-
-            response = requests.get(latestURL, headers = headers).text
-            response = json.loads(response)
+            response = json.loads(net_request(self=self, url=latestURL, worker=worker).text)
             try:
                 data = response.get("data")
                 database = sqlite3.connect('database.db')
@@ -1320,7 +1348,7 @@ class MainWindow(QMainWindow):
                 database = sqlite3.connect('database.db')
                 cursor = database.cursor()
                 cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
-                response = json.loads(requests.get(latest5mURL, headers = headers).text)
+                response = json.loads(net_request(self=self, url=latest5mURL, worker=worker).text)
                 if response.get('timestamp') > lastUpdate:
                     lastUpdate = response.get('timestamp')
                     print(lastUpdate)
@@ -1484,7 +1512,7 @@ class MainWindow(QMainWindow):
                     time.sleep(1)
 
             #build filtered item list
-            itemList = json.loads(requests.get(itemListURL, headers = headers).text)
+            itemList = json.loads(net_request(self=self, url=itemListURL, worker=worker).text)
             tempItemList = {}
             watchCount = 0
             for item in itemList.keys():
@@ -1757,7 +1785,8 @@ class MainWindow(QMainWindow):
                 lastEntryTime = repairList[item]
                 curTime = int(time.time())
                 if (curTime - lastEntryTime) > 60*5:  #if more than 5 minutes old
-                    response = json.loads(requests.get(priceHistory5mURL + ''.join(item), headers=headers).text).get('data')
+                    response = json.loads(net_request(self=self, url=(priceHistory5mURL + ''.join(item)), worker=worker).text).get('data')
+                    
                     for entry in response:
                         timestamp = entry.get('timestamp')
                         avgHighPrice = entry.get('avgHighPrice')
