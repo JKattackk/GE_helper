@@ -49,6 +49,7 @@ alertConfigFile = "cfg/alertConfig.json"
 filterConfigFile = "cfg/filterConfig.json"
 quickAlertMuteFile = "cfg/quickAlertMute.json"
 alertMuteFile = "cfg/alertMute.json"
+lastState = "cfg/stateMemory.json"
 
 ## default item filter values
 def_minBuyLimitValue = 2000000
@@ -1812,6 +1813,16 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         print("Window close event triggered!")
+        # Save current window state
+        applicationState = {"windowGeometry": self.saveGeometry().data().hex(), 
+         "windowState": self.saveState().data().hex(),
+         "alertSplitterState": self.ui.alert_page_splitter.saveState().data().hex(),
+         "page": self.ui.main_stack_widget.currentIndex()}
+        
+        with open(lastState, "w") as f:
+            json.dump(applicationState, f)
+            print("Application state saved")
+
         super().closeEvent(event)
         for worker in get_active_workers_snapshot():
             try:
@@ -1854,6 +1865,21 @@ if __name__ == "__main__":
         window = app.main_window
 
         print("About to show window")
+        # check if last state is saved and attempt to restore it if so
+
+        if os.path.isfile(lastState):
+            try:
+                with open(lastState, "r") as f:
+                    applicationState = json.load(f)
+                    window.restoreGeometry(QByteArray.fromHex(applicationState.get("windowGeometry").encode()))
+                    window.restoreState(QByteArray.fromHex(applicationState.get("windowState").encode()))
+                    window.ui.alert_page_splitter.restoreState(QByteArray.fromHex(applicationState.get("alertSplitterState").encode()))
+                    window.ui.main_stack_widget.setCurrentIndex(applicationState.get("page"))
+                    print("Restored application state from last session")
+            except Exception as e:
+                print("Error restoring application state:", e)
+
+
         window.show()
         
         # debug: print top-level widgets now and in 1s
