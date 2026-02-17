@@ -4,3 +4,4 @@ cfg/filterConfig.json
 cfg/alertMute.json
 cfg/quickAlertMute.json
 cfg/stateMemory.json
+debug.log

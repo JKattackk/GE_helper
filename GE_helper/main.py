@@ -6,6 +6,7 @@ import requests
 import traceback
 import weakref
 import threading
+import webbrowser
 
 import numpy as np
 import difflib
@@ -39,6 +40,8 @@ latestURL = "https://prices.runescape.wiki/api/v1/osrs/latest"
 headers = {
     'User-Agent': 'GE price trend tracking wip discord @kat6541'
 }
+
+web_lookup_url = "https://www.ge-tracker.com/item/"
 
 # database table schemas
 filteredItemListValues = "(id INTEGER PRIMARY KEY, itemName, buyLimit, lowPrice, highPrice, value, highAlch, lowVolume, highVolume, lowPriceChange, highPriceChange, lowVolumeChange, highVolumeChange, timestamp, tracked)"
@@ -490,7 +493,8 @@ class MainWindow(QMainWindow):
             self.localList = []
             self.alertMutes = {}
             self.quickAlertMutes = {}
-            
+            self.currentItemID = None
+            self.currentTimeFrame = "24h"
             if os.path.isfile(quickAlertMuteFile):
                 try:
                     with open(quickAlertMuteFile, "r") as f:
@@ -602,6 +606,13 @@ class MainWindow(QMainWindow):
         self.ui.alerts_button.clicked.connect(self.onAlertsButtonToggle)
         self.ui.save_alert_button.clicked.connect(self.saveAlertConfig)
 
+        self.ui.graph_refresh_button.clicked.connect(self.onGraphRefreshButtonClicked)
+        self.ui.graph_web_button.clicked.connect(self.fetchItemWebpage)
+        self.ui.one_day_button.clicked.connect(self.onOneDayButtonClicked)
+        self.ui.two_week_button.clicked.connect(self.onTwoWeekButtonClicked)
+        self.ui.three_month_button.clicked.connect(self.onThreeMonthButtonClicked)
+        self.ui.one_year_button.clicked.connect(self.onOneYearButtonClicked)
+
         self.ui.main_stack_widget.currentChanged['int'].connect(self.pageChange)
 
         self.ui.stylesheet_button.clicked.connect(self.updateStylesheet)
@@ -609,6 +620,8 @@ class MainWindow(QMainWindow):
         self.ui.alert_list.itemDoubleClicked.connect(self.onAlertDoubleClick)
         self.ui.page_alert_list.itemDoubleClicked.connect(self.onAlertDoubleClick)
         self.ui.page_quickAlerts_list.itemDoubleClicked.connect(self.onAlertDoubleClick)
+
+
         #loading screen control
         self.signals.progBarChange.connect(self.updateBar)
         self.signals.loadTextChange.connect(self.updateLoadingText)
@@ -824,7 +837,10 @@ class MainWindow(QMainWindow):
     def activateMainWindow(self):
         print("Setting up main window")
         self.startPriceLoop()
-        self.updateGraphPage(self.localList[0][0])
+        itemID = self.localList[0][0]
+        self.updateGraphPage(itemID)
+        self.currentItemID = itemID
+        self.currentTimeFrame = "24h"
         self.ui.main_stack_widget.setCurrentIndex(1)
         self.ui.graph_button.setEnabled(True)
         self.ui.graph_button.setChecked(True)
@@ -834,7 +850,9 @@ class MainWindow(QMainWindow):
         self.ui.search_bar.setEnabled(True)
         print("main window setup complete")
        
-    def updateGraphPage(self, itemID):
+    def updateGraphPage(self, itemID = None):
+        if itemID is None:
+            itemID = self.currentItemID
         print(f"updating graph with {itemID}")
         try:
             database = sqlite3.connect('database.db')
@@ -1137,8 +1155,56 @@ class MainWindow(QMainWindow):
     def onAlertsButtonToggle(self):
         self.ui.main_stack_widget.setCurrentIndex(2)
     
+    
+    def fetchItemWebpage(self):
+        try:
+            url  = web_lookup_url + self.currentItemID
+            webbrowser.open(url)
+        except Exception as e:
+            print(f"Error opening web page: {e}")
+    def onOneDayButtonClicked(self):
+        #  debounce to prevent spam requests if someone tries to mash the buttons
+        self.ui.one_day_button.setEnabled(False)
+        QTimer.singleShot(1000, lambda: self.ui.one_day_button.setEnabled(True))
+        self.currentTimeFrame = "24h"
+        self.updateGraphPage()
+
+    def onTwoWeekButtonClicked(self):
+        #  debounce to prevent spam requests if someone tries to mash the buttons
+        self.ui.two_week_button.setEnabled(False)
+        QTimer.singleShot(1000, lambda: self.ui.two_week_button.setEnabled(True))
+        self.currentTimeFrame = "2w"
+        self.updateGraphPage()
+    def onThreeMonthButtonClicked(self):
+        #  debounce to prevent spam requests if someone tries to mash the buttons
+        self.ui.three_month_button.setEnabled(False)
+        QTimer.singleShot(1000, lambda: self.ui.three_month_button.setEnabled(True))
+        self.currentTimeFrame = "3m"
+        self.updateGraphPage()
+    def onOneYearButtonClicked(self):
+        #  debounce to prevent spam requests if someone tries to mash the buttons
+        self.ui.one_year_button.setEnabled(False)
+        QTimer.singleShot(1000, lambda: self.ui.one_year_button.setEnabled(True))
+        self.currentTimeFrame = "1y"
+        self.updateGraphPage()
+    def onGraphRefreshButtonClicked(self):
+        #  debounce to prevent spam requests if someone tries to mash the buttons
+        self.ui.graph_refresh_button.setEnabled(False)
+        QTimer.singleShot(1000, lambda: self.ui.graph_refresh_button.setEnabled(True))
+        self.updateGraphPage()
+
     def pageChange(self, index):
+        if index == 0:
+            self.ui.config_button.setEnabled(True)
+            self.ui.config_button.setChecked(True)
+            self.ui.alert_scroll_area.setVisible(True)
+        elif index == 1:
+            self.ui.graph_button.setEnabled(True)
+            self.ui.graph_button.setChecked(True)
+            self.ui.alert_scroll_area.setVisible(True)
         if index == 2:
+            self.ui.alerts_button.setEnabled(True)
+            self.ui.alerts_button.setChecked(True)
             self.ui.alert_scroll_area.setVisible(False)
         else:
             self.ui.alert_scroll_area.setVisible(True)
@@ -1645,31 +1711,72 @@ class MainWindow(QMainWindow):
             avgHighVol = avgHighVol / len(highVolumes)
         return {"avgLowPrice": avgLowPrice, "avgHighPrice": avgHighPrice, "avgLowVol": avgLowVol, "avgHighVol": avgHighVol}
     
-    def plotPrep(self, itemID, worker = None):
-        database = sqlite3.connect('database.db')
-        cursor = database.cursor()
-        cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
-        command = "SELECT name FROM priceHistory5m.sqlite_master WHERE type='table' AND name='itemID" + itemID + "';"
-        query = cursor.execute(command)
-        minTime = time.time() - 24*60*60 #24 hours ago
-        if not query.fetchone() == None:
-            tableName = "priceHistory5m.itemID" + itemID
-            command = "SELECT timestamp, avgHighPrice, avgLowPrice, highPriceVolume, lowPriceVolume FROM " + tableName + " WHERE timestamp >= " + str(minTime) + ";"
-            query = cursor.execute(command)
-            dat = query.fetchall()
-            database.close()
+    def plotPrep(self, itemID=None, worker = None, timeFrame = None):
+        data = None
+        if timeFrame is None:
+            timeFrame = self.currentTimeFrame
+        if itemID is None:
+            itemID = self.currentItemID
 
-            data = {
-                'time': np.fromiter((row[0] for row in dat), dtype=np.int64),
-                'highPrice': np.fromiter((row[1] if row[1] is not None else np.nan for row in dat), dtype=np.float64),
-                'lowPrice':  np.fromiter((row[2] if row[2] is not None else np.nan for row in dat), dtype=np.float64),
-                'highVol':   np.fromiter((row[3] if row[3] is not None else 0 for row in dat), dtype=np.float64),
-                'lowVol':    np.fromiter((row[4] if row[4] is not None else 0 for row in dat), dtype=np.float64)
+
+        if timeFrame == "24h":
+            database = sqlite3.connect('database.db')
+            cursor = database.cursor()
+            cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
+            command = "SELECT name FROM priceHistory5m.sqlite_master WHERE type='table' AND name='itemID" + itemID + "';"
+            query = cursor.execute(command)
+            minTime = time.time() - 24*60*60 #24 hours ago
+            if not query.fetchone() == None:
+                tableName = "priceHistory5m.itemID" + itemID
+                command = "SELECT timestamp, avgHighPrice, avgLowPrice, highPriceVolume, lowPriceVolume FROM " + tableName + " WHERE timestamp >= " + str(minTime) + ";"
+                query = cursor.execute(command)
+                dat = query.fetchall()
+                database.close()
+                data = {
+                'timestamp': np.fromiter((row[0] for row in dat), dtype=np.int64),
+                'avgHighPrice': np.fromiter((row[1] if row[1] is not None else np.nan for row in dat), dtype=np.float64),
+                'avgLowPrice':  np.fromiter((row[2] if row[2] is not None else np.nan for row in dat), dtype=np.float64),
+                'highPriceVolume':   np.fromiter((row[3] if row[3] is not None else 0 for row in dat), dtype=np.float64),
+                'lowPriceVolume':    np.fromiter((row[4] if row[4] is not None else 0 for row in dat), dtype=np.float64)
             }
+            else:
+                print(f"no table for {itemID}")
+                database.close()
+        elif timeFrame == "2w":
+            minTime = time.time() - 14*24*60*60 # 2 weeks ago
+            response = json.loads(net_request(self=self, url=("https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=1h&id=" + itemID), worker=worker).text).get("data")
+            for item in response:
+                if item.get("timestamp") < minTime:
+                    response.remove(item)
+                else:
+                    break
+            data = response
+        elif timeFrame == "3m":
+            minTime = time.time() - 90*24*60*60 # 3 months ago
+            response = json.loads(net_request(self=self, url=("https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=6h&id=" + itemID), worker=worker).text).get("data")
+            for item in response:
+                if item.get("timestamp") < minTime:
+                    response.remove(item)
+                else:
+                    break
+            data = response
+        elif timeFrame == "1y":
+            minTime = time.time() - 365*24*60*60 # 1 year ago
+            response = json.loads(net_request(self=self, url=("https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=24h&id=" + itemID), worker=worker).text).get("data")
+            for item in response:
+                if item.get("timestamp") < minTime:
+                    response.remove(item)
+                else:
+                    break
+            data = response
+        else:
+            print("Invalid time frame in plotprep")
+        if data is not None:
             df = pd.DataFrame(data)
+            df = df.fillna(np.nan)
             #convert to datetime
             local_tz = tz.tzlocal()
-            df['datetime'] = pd.to_datetime(df['time'], unit='s', utc = True).dt.tz_convert(local_tz)
+            df['datetime'] = pd.to_datetime(df['timestamp'], unit='s', utc = True).dt.tz_convert(local_tz)
 
             #Downsample / aggregate if dataset is large to keep interactive performance
             max_points = 3000
@@ -1696,7 +1803,7 @@ class MainWindow(QMainWindow):
                 vol_bins = f'{mins}min'
 
             try:
-                vol_group = df.set_index('datetime').resample(vol_bins).sum()[['highVol','lowVol']].reset_index()
+                vol_group = df.set_index('datetime').resample(vol_bins).sum()[['highPriceVolume','lowPriceVolume']].reset_index()
             except Exception:
                 vol_group = df[['datetime','highVol','lowVol']]
 
@@ -1705,7 +1812,7 @@ class MainWindow(QMainWindow):
             fig.add_trace(
                 go.Scattergl(
                     x=df_price['datetime'].to_numpy(),
-                    y=df_price['highPrice'].to_numpy(),
+                    y=df_price['avgHighPrice'].to_numpy(),
                     mode='lines+markers',
                     line=dict(color='orange', width=1),
                     connectgaps=True,
@@ -1716,7 +1823,7 @@ class MainWindow(QMainWindow):
             fig.add_trace(
                 go.Scattergl(
                     x=df_price['datetime'].to_numpy(),
-                    y=df_price['lowPrice'].to_numpy(),
+                    y=df_price['avgLowPrice'].to_numpy(),
                     mode='lines+markers',
                     line=dict(color='dodgerblue', width=1),
                     connectgaps=True,
@@ -1728,7 +1835,7 @@ class MainWindow(QMainWindow):
             fig.add_trace(
                 go.Bar(
                     x=vol_group['datetime'],
-                    y=vol_group['highVol'],
+                    y=vol_group['highPriceVolume'],
                     marker_color='orange',
                     name='highVol',
                     showlegend=False
@@ -1738,7 +1845,7 @@ class MainWindow(QMainWindow):
             fig.add_trace(
                 go.Bar(
                     x=vol_group['datetime'],
-                    y=vol_group['lowVol'],
+                    y=vol_group['lowPriceVolume'],
                     marker_color='dodgerblue',
                     name='lowVol',
                     showlegend=False
@@ -1762,8 +1869,7 @@ class MainWindow(QMainWindow):
             # Emit the prepared figure back to the main thread for rendering
             self.signals.graphReady.emit(fig)
         else:
-            print(f"no table for {itemID}")
-            database.close()
+            print("no data for plotPrep")
 
     def repairDB(self, repairList, worker = None):
         print("Starting DB repair...")
