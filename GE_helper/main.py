@@ -118,8 +118,9 @@ class StatusIndicator(QWidget):
     PRESETS = {
         "initializing": QColor("#FFFFFF"),
         "ok": QColor("#41e968"), #normal app behavior
-        "working": QColor("#f3a033"), #background tasks in progress (database rebuilds, )
-        "error": QColor("#e53935"), #critical error (refused connections, unhandled exceptions)
+        "working": QColor("#f5cd49"), #background tasks in progress (database rebuilds, )
+        "warning": QColor("#d16806"), #potential issue
+        "error": QColor("#db4c0a"), #critical error (refused connections, unhandled exceptions)
         "off": QColor("#808080")
     }
     def __init__(self, parent=None, diameter=14):
@@ -251,9 +252,8 @@ class signals(QObject): #organize this better
     killPriceLoop = pyqtSignal()
     alertConfigSaved = pyqtSignal()
 
-    newInProgressItem = pyqtSignal(object)
-    newProgressUpdate = pyqtSignal(object)
-    inProgressItemComplete = pyqtSignal(object)
+    statusChange = pyqtSignal(object)
+
     newUpdate = pyqtSignal(int)
     newQuickAlerts = pyqtSignal(list)
 class ContextMenu(QFrame):
@@ -398,7 +398,9 @@ class Worker(QRunnable):
         self.args = args
         self.kwargs = kwargs
         self.is_killed = False
-        self.statusString = ''
+        self.status = {"workItem":  [False, ""],
+                       "Warning": [False, ""],
+                       "Error": [False, ""]}
 
     @pyqtSlot()
     def run(self):
@@ -422,10 +424,27 @@ class Worker(QRunnable):
                     pass
     def kill(self):
         self.is_killed = True
-    def getStatusString(self):
-        return self.statusString
-    def setStatusString(self, status):
-        self.statusString = status
+    def getStatus(self):
+        return self.status
+    def updateStatus(self, statusType, status):
+        """
+        statusType is a string that indicates status to be updated ("workItem", "Warning", or "Error")
+        status is a list containing first the boolean indicating whether the status is active,
+        and second a string describing the status if it is active.
+        """
+        try:
+            if statusType in self.status:
+                if len(status) == 2:
+                    if isinstance(status[0], bool) and isinstance(status[1], str):
+                        self.status[statusType] = status
+                    else:
+                        print("status contains invalid types.  Expected [bool, str]")
+                else:
+                    print("status contains invalid number of elements. Expected 2 [bool, str]")
+            else:
+                print("invalid statusType. Expected 'workItem', 'Warning', or 'Error'")
+        except Exception as e:
+            print(f"Error updating worker status: {e}")
 
 def get_active_workers_snapshot():
     """Returns a snapshot of currently active workers as a list"""
@@ -435,7 +454,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         print("starting __init__...")
         try:
-            self.inProgressItems = []
+            self.statusWorkers = []
             self.localList = []
             self.alertMutes = {}
             self.quickAlertMutes = {}
@@ -576,9 +595,8 @@ class MainWindow(QMainWindow):
         self.signals.newAlerts.connect(self.updateAlerts)
         self.signals.alertConfigSaved.connect(self.updateConfigBoxes)
 
-        self.signals.newInProgressItem.connect(self.addInProgressItem)
-        self.signals.newProgressUpdate.connect(self.updateStatus)
-        self.signals.inProgressItemComplete.connect(self.removeInProgressItem)
+        self.signals.statusChange.connect(self.updateStatus)
+        
         self.signals.newUpdate.connect(self.newUpdate)
         self.signals.newQuickAlerts.connect(self.updateQuickAlerts)
 
@@ -707,22 +725,54 @@ class MainWindow(QMainWindow):
             self.ui.page_quickAlerts_list.setItem(row, 2, QTableWidgetItem(alert["highPriceChange"]))
             self.ui.page_quickAlerts_list.setItem(row, 3, QTableWidgetItem(alert["highTime"]))
 
-    def addInProgressItem(self, worker):
-        self.inProgressItems.append(worker)
-        self.updateStatus()
-
-    def updateStatus(self):
-        if len(self.inProgressItems) == 0:
-            self.status_indicator.set_status(name_or_color="ok", tooltip= "No background tasks")
+    def updateStatus(self, worker):
+        try:
+            updatedStatus = worker.getStatus()
+        except Exception as e:
+            print(f"Error getting worker status: {e}")
+            try:
+                self.statusWorkers.remove(worker)
+            except Exception:
+                pass
+        if not (updatedStatus["Error"][0] or updatedStatus["Warning"][0] or updatedStatus["workItem"][0]):
+            # no active status, try to remove worker from statusWorkers list.
+            if worker in self.statusWorkers:
+                self.statusWorkers.remove(worker)
+            else:
+                print("Failed to find worker with no status in statusWorkers list")
         else:
-            statusText = ""
-            for worker in self.inProgressItems:
-                statusText = (statusText + worker.getStatusString() + "\n")
-            self.status_indicator.set_status(name_or_color="working", tooltip=statusText)
-
-    def removeInProgressItem(self, worker):
-        self.inProgressItems.remove(worker)
-        self.updateStatus()
+            if not worker in self.statusWorkers:
+                self.statusWorkers.append(worker)
+        workItemString = ""
+        warningString = ""
+        errorString = ""
+        for w in self.statusWorkers:
+            try:
+                status = w.getStatus()
+            except Exception as e:
+                print(f"Error getting worker status: {e}")
+            try:
+                self.statusWorkers.remove(w)
+            except Exception:
+                pass
+            
+            if status["workItem"][0]:
+                workItemString += status["workItem"][1] + "\n"
+            if status["Warning"][0]:
+                warningString += status["Warning"][1] + "\n"
+            if status["Error"][0]:
+                errorString += status["Error"][1] + "\n"
+        if not errorString == "":
+            statusString = "Error:\n" + errorString
+            self.status_indicator.set_status("error", statusString)
+        elif not warningString == "":
+            statusString = "Warning:\n" + warningString
+            self.status_indicator.set_status("warning", statusString)
+        elif not workItemString == "":
+            statusString = "In progress:\n" + workItemString
+            self.status_indicator.set_status("working", statusString)
+        else:
+            self.status_indicator.set_status("ok", "")
 
     def newItem(self, itemID):
         print("new item received:", itemID)
@@ -1221,7 +1271,10 @@ class MainWindow(QMainWindow):
         while True:
             if worker.is_killed:
                 break
-            response = json.loads(requests.get(latestURL, headers = headers).text)
+
+
+            response = requests.get(latestURL, headers = headers).text
+            response = json.loads(response)
             try:
                 data = response.get("data")
                 database = sqlite3.connect('database.db')
@@ -1240,7 +1293,7 @@ class MainWindow(QMainWindow):
                         highPriceChange = 0
 
                     # quick alert condition
-                    if highPriceChange < -60:
+                    if highPriceChange < -40:
                         print(f"quick alert {id_str}")
                         if id_str in self.quickAlertMutes:
                             if time.time() > self.quickAlertMutes[id_str]:
@@ -1686,8 +1739,8 @@ class MainWindow(QMainWindow):
     def repairDB(self, repairList, worker = None):
         print("Starting DB repair...")
         itemLen = len(repairList)
-        worker.setStatusString("Updating price history: 0/%d" % itemLen)
-        self.signals.newInProgressItem.emit(worker)
+        worker.updateStatus("workItem", [True, "Updating price history: 0/%d" % itemLen])
+        self.signals.statusChange.emit(worker)
         try:
             db = sqlite3.connect('database.db')
             cursor = db.cursor()
@@ -1697,8 +1750,8 @@ class MainWindow(QMainWindow):
                 if worker.is_killed:
                     print("stopping DB repair")
                     db.close()
-                    worker.setStatusString("")
-                    self.signals.inProgressItemComplete.emit(worker)
+                    worker.updateStatus("workItem", [False, ""])
+                    self.signals.statusChange.emit(worker)
                     return None
                 tableName = "priceHistory5m.itemID" + item
                 lastEntryTime = repairList[item]
@@ -1716,12 +1769,12 @@ class MainWindow(QMainWindow):
                         db.commit()
                     time.sleep(1)
                 count = count + 1
-                worker.setStatusString("Updating price history: %d/%d" % (count, itemLen))
-                self.signals.newProgressUpdate.emit(worker)
+                worker.updateStatus("workItem", [True, "Updating price history: %d/%d" % (count, itemLen)])
+                self.signals.statusChange.emit(worker)
             db.close()
             print("DB repair complete")
-            worker.setStatusString("")
-            self.signals.inProgressItemComplete.emit(worker)
+            worker.updateStatus("workItem", [False, ""])
+            self.signals.statusChange.emit(worker)
             
 
         except Exception as e:
