@@ -25,10 +25,12 @@ from PyQt6.QtCore import *
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtGui import QColor, QPainter, QBrush, QPen, QFontDatabase, QPaintEvent, QEnterEvent, QKeyEvent, QFocusEvent, QCursor
 from output import Ui_MainWindow
-from contextMenuOutput import Ui_Form
-
+from contextMenuOutput import Ui_Form as Ui_contextMenu
+from historyBarOutput import Ui_Form as Ui_historyBar
+from sidebar import SideBar
 #pyuic6 -o .\GE_helper\output.py .\GE_helper\newUI.ui
 #pyuic6 -o .\GE_helper\contextMenuOutput.py .\GE_helper\muteDialog.ui
+#pyuic6 -o .\GE_helper\historyBarOutput.py .\GE_helper\historyBar.ui 
 
 # URLS for API calls
 itemListURL = "https://chisel.weirdgloop.org/gazproj/gazbot/os_dump.json"
@@ -146,7 +148,7 @@ def net_request(self, url, worker=None):
                 return data
             except Exception as e:
                 pass
-        
+
 class StatusIndicator(QWidget):
     """Circular indicator widget for showing app status
      Main status indicated via color, tooltip shows details on hover"""
@@ -300,7 +302,7 @@ class ContextMenu(QFrame):
     new_alert_mute = pyqtSignal(str, int)
     def __init__(self, parent = None, table=None, item_id = None):
         super().__init__(parent)
-        self.ui = Ui_Form()
+        self.ui = Ui_contextMenu()
         self.ui.setupUi(self)
         self.setup_signals()
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint)
@@ -517,6 +519,32 @@ class MainWindow(QMainWindow):
             self.ui = Ui_MainWindow()
             self.ui.setupUi(self)
             
+            # add history bar
+            try:
+                # get header bar height for sidebar positioning
+                header_height = self.ui.header_bar.height() if hasattr(self.ui, 'header_bar') else 40
+                    
+                # creating sidebar as child of main_widget, positioned below header
+                self.sidebar = SideBar(self.ui.main_widget, top_offset=header_height)
+                self.sidebar.raise_()  # Ensure it draws on top
+                    
+                # event filter to handle main_widget resizing
+                class SidebarResizeFilter(QObject):
+                    def __init__(self, sidebar):
+                        super().__init__()
+                        self.sidebar = sidebar
+                    def eventFilter(self, obj, event):
+                        if event.type() == QEvent.Type.Resize:
+                            self.sidebar.position_sidebar()
+                        return False
+                    
+                self.sidebar_filter = SidebarResizeFilter(self.sidebar)
+                self.ui.main_widget.installEventFilter(self.sidebar_filter)
+            except Exception as e:
+                print(f"Error setting up sidebar: {e}")
+                import traceback
+                traceback.print_exc()
+            
             self.ui.page_quickAlerts_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
             self.ui.page_alert_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
             self.ui.alert_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -551,7 +579,7 @@ class MainWindow(QMainWindow):
             self.signals = signals()
             self.setup_signals()
 
-            self.ui.history_list.setVisible(False)
+            #self.ui.history_list.setVisible(False)
             self.updateConfigBoxes()
 
             #graph page setup
@@ -600,7 +628,7 @@ class MainWindow(QMainWindow):
     def setup_signals(self):
         #button connections
         self.ui.rebuild_db_button.clicked.connect(self.rebuildDBPressed)
-        self.ui.history_button.toggled['bool'].connect(self.onHistoryButtonToggle)
+        #self.ui.history_button.toggled['bool'].connect(self.onHistoryButtonToggle)
         self.ui.config_button.clicked.connect(self.onConfigButtonToggle)
         self.ui.graph_button.clicked.connect(self.onGraphButtonToggle)
         self.ui.alerts_button.clicked.connect(self.onAlertsButtonToggle)
@@ -1149,9 +1177,11 @@ class MainWindow(QMainWindow):
         self.ui.main_stack_widget.setCurrentIndex(0)
     def onHistoryButtonToggle(self, state):
         if state:
-            self.ui.history_list.setVisible(True)
+            #self.ui.history_list.setVisible(True)
+            print("temp")
         else:
-            self.ui.history_list.setVisible(False)
+            #self.ui.history_list.setVisible(False)
+            print("temp")
     def onAlertsButtonToggle(self):
         self.ui.main_stack_widget.setCurrentIndex(2)
     
@@ -1941,6 +1971,13 @@ class MainWindow(QMainWindow):
     def showEvent(self, event):
         print("MainWindow.showEvent()")
         super().showEvent(event)
+
+    def resizeEvent(self, event):
+        """Handle window resize to reposition sidebar"""
+        super().resizeEvent(event)
+        # Reposition the sidebar when the main widget is resized
+        if hasattr(self, 'sidebar'):
+            self.sidebar.position_sidebar()
 
     def hideEvent(self, event):
         print("MainWindow.hideEvent()")

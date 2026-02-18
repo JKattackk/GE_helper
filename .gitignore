@@ -5,3 +5,9 @@ cfg/alertMute.json
 cfg/quickAlertMute.json
 cfg/stateMemory.json
 debug.log
+/ignore
+GE_helper/historyBarOutput.py
+GE_helper/historyBar.ui
+GE_helper/historyBar.ui
+GE_helper/__pycache__/historyBarOutput.cpython-312.pyc
+GE_helper/historyBar.ui
