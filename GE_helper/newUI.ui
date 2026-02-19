@@ -2201,16 +2201,16 @@
                 <widget class="QWidget" name="alerts_page">
                  <layout class="QVBoxLayout" name="verticalLayout_15">
                   <property name="spacing">
-                   <number>24</number>
+                   <number>12</number>
                   </property>
                   <property name="leftMargin">
-                   <number>24</number>
+                   <number>12</number>
                   </property>
                   <property name="topMargin">
                    <number>12</number>
                   </property>
                   <property name="rightMargin">
-                   <number>24</number>
+                   <number>12</number>
                   </property>
                   <property name="bottomMargin">
                    <number>12</number>
@@ -2235,19 +2235,19 @@
                      </property>
                      <layout class="QHBoxLayout" name="horizontalLayout_22">
                       <property name="spacing">
-                       <number>0</number>
+                       <number>6</number>
                       </property>
                       <property name="leftMargin">
-                       <number>0</number>
+                       <number>9</number>
                       </property>
                       <property name="topMargin">
-                       <number>0</number>
+                       <number>9</number>
                       </property>
                       <property name="rightMargin">
-                       <number>0</number>
+                       <number>9</number>
                       </property>
                       <property name="bottomMargin">
-                       <number>0</number>
+                       <number>9</number>
                       </property>
                       <item>
                        <widget class="QTableWidget" name="page_alert_list">
@@ -2330,19 +2330,19 @@
                         </property>
                         <layout class="QHBoxLayout" name="horizontalLayout_23">
                          <property name="spacing">
-                          <number>0</number>
+                          <number>6</number>
                          </property>
                          <property name="leftMargin">
-                          <number>0</number>
+                          <number>9</number>
                          </property>
                          <property name="topMargin">
-                          <number>0</number>
+                          <number>9</number>
                          </property>
                          <property name="rightMargin">
-                          <number>0</number>
+                          <number>9</number>
                          </property>
                          <property name="bottomMargin">
-                          <number>0</number>
+                          <number>9</number>
                          </property>
                          <item>
                           <widget class="QTableWidget" name="page_quickAlerts_list">
