@@ -1,8 +1,23 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QScrollArea, QFrame
 )
-from PyQt6.QtCore import Qt, QRect, QPropertyAnimation, QEasingCurve, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, QRect, QPropertyAnimation, QEasingCurve, pyqtSignal, QTimer, QObject
 from PyQt6.QtGui import QColor, QPalette
+
+
+class HistoryItemLabel(QLabel):
+    """label that tracks item ID and emits signal on click"""
+    clicked = pyqtSignal(str, str)  # emits (itemID, itemName)
+    
+    def __init__(self, text, item_id, parent=None):
+        super().__init__(text, parent)
+        self.item_id = item_id
+        self.item_name = text
+        
+    def mousePressEvent(self, event):
+        #emit clicked signal when label is clicked
+        self.clicked.emit(self.item_id, self.item_name)
+        super().mousePressEvent(event)
 
 
 class SideBar(QWidget):
@@ -11,6 +26,8 @@ class SideBar(QWidget):
     button sticks out and stays visible when collapsed
     draws over  main application
     """
+    # Signal emitted when a history item is clicked
+    history_item_clicked = pyqtSignal(str, str)  # Emits (itemID, itemName)
     
     def __init__(self, parent=None, top_offset=0):
         super().__init__(parent)
@@ -74,7 +91,7 @@ class SideBar(QWidget):
         self.content_layout = QVBoxLayout(self.content_widget)
         self.content_layout.setContentsMargins(10, 10, 10, 10)
         self.content_layout.setSpacing(10)
-        
+
         # Header
         self.header_label = QLabel("History")
         self.header_label.setStyleSheet("""
@@ -141,7 +158,7 @@ class SideBar(QWidget):
             self.expand()
     
     def expand(self):
-        """Expand the sidebar"""
+        """expand the sidebar"""
         if self.is_expanded:
             return
         
@@ -205,12 +222,13 @@ class SideBar(QWidget):
         """
         return self.history_layout
     
-    def add_history_item(self, text):
+    def add_history_item(self, text, item_id=None):
         """
-        Add a history item to the sidebar.
+        adds a history item to the sidebar.
         
-        Args:
+        args:
             text (str): The text to display for the history item
+            item_id (str): The item ID associated with this history item
         """
         # remove placeholder if it exists and is the first item
         if self.history_layout.count() > 0:
@@ -220,19 +238,46 @@ class SideBar(QWidget):
                 if "will appear here" in label.text():
                     self.history_layout.removeWidget(label)
                     label.deleteLater()
-        
-        item_label = QLabel(text)
+
+        # if the item is already in the history remove it
+        for i in range(self.history_layout.count()):
+            item = self.history_layout.itemAt(i)
+            if item and isinstance(item.widget(), HistoryItemLabel):
+                if item.widget().text() == text:
+                    self.history_layout.removeWidget(item.widget())
+                    break
+                
+        item_label = HistoryItemLabel(text, item_id)
         item_label.setStyleSheet("""
             QLabel {
                 padding: 8px;
-                background-color: rgb(255, 255, 255);
-                border: 1px solid rgb(200, 200, 200);
+                background-color: rgb(120, 120, 120);
+                border: 1px solid rgb(100, 100, 100);
                 border-radius: 3px;
-                color: rgb(0, 0, 0);
+                color: #f5f5f5;
+            }
+            QLabel:hover {
+                background-color: rgb(140, 140, 140);
             }
         """)
-        item_label.setWordWrap(True)
-        self.history_layout.insertWidget(self.history_layout.count() - 1, item_label)
+        item_label.setWordWrap(False)
+
+        # Connect the clicked signal from the label to the sidebar's signal
+        item_label.clicked.connect(self.history_item_clicked.emit)
+        self.history_layout.insertWidget(0, item_label)
+
+        # remove last item when total number of items in history exceeds 30
+        if self.history_layout.count() > 30:
+            self.history_layout.removeWidget(self.history_layout.itemAt(self.history_layout.count()-2).widget())
+
+    def get_history(self):
+        # placeholder for now
+        history = []
+        for i in range(self.history_layout.count()):
+            item = self.history_layout.itemAt(i)
+            if item and isinstance(item.widget(), QLabel):
+                history.append(item.widget().text())
+        return history
     
     def resizeEvent(self, event):
         """Handle parent resize events to adjust sidebar position"""

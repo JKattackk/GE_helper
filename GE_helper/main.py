@@ -519,7 +519,7 @@ class MainWindow(QMainWindow):
             self.ui = Ui_MainWindow()
             self.ui.setupUi(self)
             
-            # add history bar
+            # history bar setup
             try:
                 # get header bar height for sidebar positioning
                 header_height = self.ui.header_bar.height() if hasattr(self.ui, 'header_bar') else 40
@@ -544,7 +544,7 @@ class MainWindow(QMainWindow):
                 print(f"Error setting up sidebar: {e}")
                 import traceback
                 traceback.print_exc()
-            
+
             self.ui.page_quickAlerts_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
             self.ui.page_alert_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
             self.ui.alert_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -672,6 +672,9 @@ class MainWindow(QMainWindow):
         
         self.signals.newUpdate.connect(self.newUpdate)
         self.signals.newQuickAlerts.connect(self.updateQuickAlerts)
+        
+        # history item clicks
+        self.sidebar.history_item_clicked.connect(self.onHistoryItemClicked)
 
     def updateStylesheet(self):
         print("updating stylesheet")
@@ -850,6 +853,14 @@ class MainWindow(QMainWindow):
     def newItem(self, itemID):
         print("new item received:", itemID)
         self.updateGraphPage(itemID)
+        item = list(filter(lambda tup: itemID in tup, self.localList))
+        if len(item) > 1:
+            print("found more than one result when searching for item in localList")
+        elif len(item) ==  0:
+            print("found no results when searching for item in localList")
+        else:
+            item_name  = item[0][1]
+            self.sidebar.add_history_item(item_name, itemID)
 
     def updatePlot(self, fig):
         html = fig.to_html(include_plotlyjs='cdn')
@@ -1182,9 +1193,13 @@ class MainWindow(QMainWindow):
         else:
             #self.ui.history_list.setVisible(False)
             print("temp")
+    
+    def onHistoryItemClicked(self, item_id, item_name):
+        print(f"History item clicked: {item_name} (ID: {item_id})")
+        self.newItem(item_id)
+    
     def onAlertsButtonToggle(self):
         self.ui.main_stack_widget.setCurrentIndex(2)
-    
     
     def fetchItemWebpage(self):
         try:
