@@ -127,13 +127,16 @@ def net_request(self, url, worker=None):
             status = [True, f"Failed network request to {url}: {e}"]
             worker.updateStatus("Error", status)
             self.signals.statusChange.emit(worker)
-        for i in range(0,5):
+            start_time = time.time()
+        for i in range(0,10):
             time.sleep(30)
             try:
                 data = requests.get(url, headers=headers)
                 status = [False, ""]
                 worker.updateStatus("Error", status)
                 self.signals.statusChange.emit(worker)
+                wait_time = time.time() - start_time
+                print("successfully completed  net request after " + str(wait_time) + " seconds")
                 return data
             except Exception as e:
                 pass
@@ -145,6 +148,20 @@ def net_request(self, url, worker=None):
                 status = [False, ""]
                 worker.updateStatus("Error", status)
                 self.signals.statusChange.emit(worker)
+                wait_time = time.time() - start_time
+                print("successfully completed  net request after " + str(wait_time) + " seconds")
+                # I think I want to adjust this so all the items are checked within the repairDB function instead of supplying it a list
+                if wait_time > 60*12:
+                    repairList = {}
+                    # if the worker is not already running, repair the DB
+                    if not self.repairWorker.getStatus()["Running"][0]:
+                        for item in self.localList:
+                            # this will just force repairDB to update ever item since all items haven't been updated in 23 minutes
+                            # this assumes that the request failed due to the host device not being conencted to the internet
+                            # should be adjusted later
+                            repairList[item[0]] = 0
+                        self.repairWorker = Worker(self.repairDB, repairList)
+                        self.threadpool.start(self.repairWorker)
                 return data
             except Exception as e:
                 pass
@@ -435,9 +452,12 @@ class Worker(QRunnable):
         self.args = args
         self.kwargs = kwargs
         self.is_killed = False
-        self.status = {"workItem":  [False, ""],
-                       "Warning": [False, ""],
-                       "Error": [False, ""]}
+        self.status = {"Running": [False, ""],
+                        "workItem":  [False, ""],
+                        "Warning": [False, ""],
+                        "Error": [False, ""]}
+        
+
 
     @pyqtSlot()
     def run(self):
@@ -446,6 +466,7 @@ class Worker(QRunnable):
             # register self as active
             with active_workers_lock:
                 active_workers.add(self)
+            self.status["Running"] = [True, f"Running {self.fn.__name__}"]
             print(f"Worker starting: {self.fn.__name__}\n")
             self.is_killed = False
             self.fn(*self.args, **self.kwargs, worker= self)
@@ -457,8 +478,9 @@ class Worker(QRunnable):
             with active_workers_lock:
                 try:
                     active_workers.discard(self)
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"failed  to discard worker after completion {e}")
+            self.status["Running"] = [False, ""]
     def kill(self):
         self.is_killed = True
     def getStatus(self):
@@ -491,6 +513,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         print("starting __init__...")
         try:
+            self.repairWorker = None
             self.statusWorkers = []
             self.localList = []
             self.alertMutes = {}
@@ -1956,8 +1979,6 @@ class MainWindow(QMainWindow):
             print("DB repair complete")
             worker.updateStatus("workItem", [False, ""])
             self.signals.statusChange.emit(worker)
-            
-
         except Exception as e:
             print("error in repairDB")
             print(e)

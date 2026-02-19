@@ -83,7 +83,14 @@ class SideBar(QWidget):
             }
         """)
         self.toggle_button.clicked.connect(self.toggle)
-        self.main_layout.addWidget(self.toggle_button, 0, Qt.AlignmentFlag.AlignTop)
+        # Create a vertical layout for the button with proper spacing to center it with the header
+        button_layout = QVBoxLayout()
+        button_layout.setContentsMargins(0, 0, 0, 0)
+        button_layout.setSpacing(0)
+        button_layout.addSpacing(5)  # Space to align button center with header
+        button_layout.addWidget(self.toggle_button, 0, Qt.AlignmentFlag.AlignHCenter)
+        button_layout.addStretch()
+        self.main_layout.addLayout(button_layout)
         
         # Sidebar content (collapsible)
         self.content_widget = QWidget()
@@ -99,7 +106,6 @@ class SideBar(QWidget):
                 color: #f5f5f5;         
                 font-weight: bold;
                 font-size: 14px;
-
             }
         """)
         self.content_layout.addWidget(self.header_label)
