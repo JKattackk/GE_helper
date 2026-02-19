@@ -33,7 +33,7 @@ class SideBar(QWidget):
         super().__init__(parent)
         self.is_expanded = False
         self.animation = None
-        self.expanded_width = 300
+        self.expanded_width = 220
         self.button_width = 16
         self.button_height = 24
         self.collapsed_width = self.button_width
@@ -144,10 +144,15 @@ class SideBar(QWidget):
             # get parent's geometry relative to itself
             parent_rect = parent.rect()
             # position at the right edge, starting from top_offset
-            x = parent_rect.right() - self.collapsed_width
+            if self.is_expanded:
+                x = parent_rect.right() - self.expanded_width
+                width  = self.expanded_width
+            else:
+                x = parent_rect.right() - self.collapsed_width
+                width  = self.collapsed_width
             y = self.top_offset
             height = parent_rect.height() - self.top_offset
-            self.setGeometry(x, y, self.collapsed_width, height)
+            self.setGeometry(x, y, width, height)
             self.raise_()  # ensure it draws on top
         
     def toggle(self):
