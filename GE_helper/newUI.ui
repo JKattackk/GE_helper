@@ -597,7 +597,7 @@
                  <string notr="true"/>
                 </property>
                 <property name="currentIndex">
-                 <number>2</number>
+                 <number>1</number>
                 </property>
                 <widget class="QWidget" name="config_page">
                  <layout class="QVBoxLayout" name="verticalLayout_8">
@@ -1308,9 +1308,15 @@
                       <enum>QLayout::SizeConstraint::SetMinimumSize</enum>
                      </property>
                      <item>
-                      <layout class="QGridLayout" name="gridLayout_5">
+                      <layout class="QGridLayout" name="graph_info_button_grid">
                        <item row="0" column="0">
                         <widget class="QPushButton" name="graph_refresh_button">
+                         <property name="sizePolicy">
+                          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                           <horstretch>0</horstretch>
+                           <verstretch>0</verstretch>
+                          </sizepolicy>
+                         </property>
                          <property name="minimumSize">
                           <size>
                            <width>10</width>
@@ -1319,9 +1325,12 @@
                          </property>
                          <property name="maximumSize">
                           <size>
-                           <width>40</width>
+                           <width>400</width>
                            <height>16777215</height>
                           </size>
+                         </property>
+                         <property name="autoFillBackground">
+                          <bool>true</bool>
                          </property>
                          <property name="text">
                           <string>r</string>
@@ -1330,11 +1339,20 @@
                        </item>
                        <item row="0" column="3">
                         <widget class="QPushButton" name="graph_web_button">
+                         <property name="sizePolicy">
+                          <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                           <horstretch>0</horstretch>
+                           <verstretch>0</verstretch>
+                          </sizepolicy>
+                         </property>
                          <property name="maximumSize">
                           <size>
-                           <width>40</width>
+                           <width>400</width>
                            <height>16777215</height>
                           </size>
+                         </property>
+                         <property name="autoFillBackground">
+                          <bool>true</bool>
                          </property>
                          <property name="text">
                           <string>Web</string>
@@ -1351,9 +1369,12 @@
                          </property>
                          <property name="maximumSize">
                           <size>
-                           <width>40</width>
+                           <width>400</width>
                            <height>16777215</height>
                           </size>
+                         </property>
+                         <property name="autoFillBackground">
+                          <bool>true</bool>
                          </property>
                          <property name="text">
                           <string>1d</string>
@@ -1370,9 +1391,12 @@
                          </property>
                          <property name="maximumSize">
                           <size>
-                           <width>40</width>
+                           <width>400</width>
                            <height>16777215</height>
                           </size>
+                         </property>
+                         <property name="autoFillBackground">
+                          <bool>true</bool>
                          </property>
                          <property name="text">
                           <string>1y</string>
@@ -1389,9 +1413,12 @@
                          </property>
                          <property name="maximumSize">
                           <size>
-                           <width>40</width>
+                           <width>400</width>
                            <height>16777215</height>
                           </size>
+                         </property>
+                         <property name="autoFillBackground">
+                          <bool>true</bool>
                          </property>
                          <property name="text">
                           <string>3m</string>
@@ -1408,9 +1435,12 @@
                          </property>
                          <property name="maximumSize">
                           <size>
-                           <width>40</width>
+                           <width>400</width>
                            <height>16777215</height>
                           </size>
+                         </property>
+                         <property name="autoFillBackground">
+                          <bool>true</bool>
                          </property>
                          <property name="text">
                           <string>14d</string>
@@ -1418,6 +1448,13 @@
                         </widget>
                        </item>
                       </layout>
+                     </item>
+                     <item>
+                      <widget class="Line" name="graph_info_line">
+                       <property name="orientation">
+                        <enum>Qt::Orientation::Horizontal</enum>
+                       </property>
+                      </widget>
                      </item>
                      <item>
                       <layout class="QHBoxLayout" name="name_hor_lay">
@@ -2398,7 +2435,7 @@
                          <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
                         </property>
                         <item>
-                         <widget class="QPushButton" name="alert_p_tool_drawe_button">
+                         <widget class="QPushButton" name="alert_p_tool_drawer_button">
                           <property name="sizePolicy">
                            <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
                             <horstretch>0</horstretch>

@@ -601,12 +601,17 @@ class MainWindow(QMainWindow):
             self.loopWorker = Worker(self.itemPriceLoop)
             self.signals = signals()
             self.setup_signals()
-
-            #self.ui.history_list.setVisible(False)
             self.updateConfigBoxes()
 
             #graph page setup
             self.ui.main_stack_widget.setCurrentIndex(0)
+
+            # hiding unimplemented / testing features
+            self.ui.alert_p_tool_drawer_button.setVisible(False)
+
+            self.ui.alert_page_tools_frame.setVisible(False)
+
+            self.ui.stylesheet_button.setVisible(False)
 
             #confirm that database exists and build has been finished
             if os.path.isfile("database.db"):

@@ -50,6 +50,42 @@ QWidget#main_graph_widget{
 	background-color: rgba(255, 255, 255, 0.04);
 }
 
+#graph_info_line{
+	border-top: 1px solid #f5f5f5; 
+	max-height: 0px;
+}
+#graph_info_widget QPushButton{
+	background-color: rgba(255, 255, 255, 0.12);
+	color: #f5f5f5;
+	border-style: outset;
+	border-width: 2px;
+	border-color: rgba(0,0,0, 0.3);
+	border-radius: 4px;
+}
+#graph_info_widget QPushButton:hover{
+	background-color: rgba(255, 255, 255, 0.15);
+	color: #f5f5f5;
+	border-style: outset;
+	border-width: 2px;
+	border-color: rgba(0,0,0, 0.3);
+	border-radius: 4px;
+}
+#graph_info_widget QPushButton:pressed{
+	background-color: rgba(255, 255, 255, 0.04);
+	color: #f5f5f5;
+	border-style: outset;
+	border-width: 2px;
+	border-color: rgba(0,0,0, 0.3);
+	border-radius: 4px;
+}
+#graph_info_widget QPushButton:disabled{
+	background-color: rgba(255, 255, 255, 0.04);
+	color: #f5f5f5;
+	border-style: outset;
+	border-width: 2px;
+	border-color: rgba(0,0,0, 0.3);
+	border-radius: 4px;
+}
 #filter_config_frame{
 	border-radius: 10px;
 	background-color: rgba(255, 255, 255, 0.04);
@@ -124,7 +160,7 @@ QLabel{
 }
 
 /* Mute menu setup */
-QWidget#Form{
+QWidget #Form{
 	border-radius: 10px;
 	background-color: #0f0f11;
 }
