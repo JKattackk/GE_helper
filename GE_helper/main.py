@@ -2,42 +2,61 @@ import sys
 import os.path
 import json
 import sqlite3
-import time
 import requests
+import traceback
+import weakref
+import threading
+import webbrowser
+
+import numpy as np
+import difflib
+import pandas as pd
+
+import time
+from datetime import datetime
+from dateutil import tz
+
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
-import pandas as pd
-import traceback
+
 from PyQt6.QtSql import *
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtGui import QColor, QPainter, QBrush, QPen, QFontDatabase, QPaintEvent, QEnterEvent, QKeyEvent, QFocusEvent, QCursor
 from output import Ui_MainWindow
-from PyQt6.QtGui import QColor, QPainter, QBrush, QPen, QFontDatabase, QMouseEvent, QPaintEvent, QEnterEvent
-import numpy as np
-import weakref
-import threading
-import difflib
-from datetime import datetime
-from dateutil import tz
+from contextMenuOutput import Ui_Form as Ui_contextMenu
+from historyBarOutput import Ui_Form as Ui_historyBar
+from sidebar import SideBar
 #pyuic6 -o .\GE_helper\output.py .\GE_helper\newUI.ui
+#pyuic6 -o .\GE_helper\contextMenuOutput.py .\GE_helper\muteDialog.ui
+#pyuic6 -o .\GE_helper\historyBarOutput.py .\GE_helper\historyBar.ui 
 
+# URLS for API calls
 itemListURL = "https://chisel.weirdgloop.org/gazproj/gazbot/os_dump.json"
-priceHistory5mURL = url = "https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=5m&id="
+priceHistory5mURL =  "https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=5m&id="
+latest5mURL = "https://prices.runescape.wiki/api/v1/osrs/5m"
 itemLookupURL = "https://www.ge-tracker.com/item/"
-
+itemIconURL = "https://secure.runescape.com/m=itemdb_rs/obj_sprite.gif?id="
+latestURL = "https://prices.runescape.wiki/api/v1/osrs/latest"
 headers = {
     'User-Agent': 'GE price trend tracking wip discord @kat6541'
 }
 
+web_lookup_url = "https://www.ge-tracker.com/item/"
+
+# database table schemas
 filteredItemListValues = "(id INTEGER PRIMARY KEY, itemName, buyLimit, lowPrice, highPrice, value, highAlch, lowVolume, highVolume, lowPriceChange, highPriceChange, lowVolumeChange, highVolumeChange, timestamp, tracked)"
 priceHistory5mValues = "(timeStamp INTEGER NOT NULL PRIMARY KEY, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume)"
-latestURL = "https://prices.runescape.wiki/api/v1/osrs/latest"
 
+# config file paths
 alertConfigFile = "cfg/alertConfig.json"
 filterConfigFile = "cfg/filterConfig.json"
+quickAlertMuteFile = "cfg/quickAlertMute.json"
+alertMuteFile = "cfg/alertMute.json"
+lastState = "cfg/stateMemory.json"
 
-## default item filter valuues
+## default item filter values
 def_minBuyLimitValue = 2000000
 def_minHourlyThroughput = 5000000
 def_minHourlyVolume = 1000
@@ -45,13 +64,13 @@ def_maxPrice = 10000000
 def_priceChangePercent = 10
 def_volChangePercent = 100
 
-
-
 # global registry of active Worker instances (weakrefs avoid leaks)
 active_workers = weakref.WeakSet()
 active_workers_lock = threading.Lock()
 
-def textToInt(string):
+def textToVal(string):
+    """Attempts to convert strings to integers, allowing suffixed k, m, and b for thousand, milliod, and billion
+    Used in config input parsing"""
     try:
         return int(string)
     except:
@@ -72,13 +91,90 @@ def textToInt(string):
                 return(num * 10**9)
             case default:
                 raise ValueError
-            
+
+def textToTime(string):
+    """Attempts to convert strings to integers, allowing suffixed k, m, and b for thousand, milliod, and billion
+    Used in config input parsing"""
+    try:
+        return int(string)
+    except:
+        endChar = string[-1].casefold()
+        string = string[:-1]
+        try:
+            num = int(string)
+        except Exception as e:
+            print("invalid input: ")
+            print(e)
+            raise ValueError
+        match endChar:
+            case 's':
+                return(num)
+            case 'm':
+                return(num*60)
+            case 'h':
+                return(num*60*60)
+            case 'd':
+                return(num*60*60*24)
+            case default:
+                raise ValueError
+
+def net_request(self, url, worker=None):
+    try:
+        data = requests.get(url, headers=headers)
+        return data
+    except Exception as e:
+        if worker is not None:
+            status = [True, f"Failed network request to {url}: {e}"]
+            worker.updateStatus("Error", status)
+            self.signals.statusChange.emit(worker)
+            start_time = time.time()
+        for i in range(0,10):
+            time.sleep(30)
+            try:
+                data = requests.get(url, headers=headers)
+                status = [False, ""]
+                worker.updateStatus("Error", status)
+                self.signals.statusChange.emit(worker)
+                wait_time = time.time() - start_time
+                print("successfully completed  net request after " + str(wait_time) + " seconds")
+                return data
+            except Exception as e:
+                pass
+        while True:
+            # infinite while loop feels stupid
+            time.sleep(60*5)
+            try:
+                data = requests.get(url, headers=headers)
+                status = [False, ""]
+                worker.updateStatus("Error", status)
+                self.signals.statusChange.emit(worker)
+                wait_time = time.time() - start_time
+                print("successfully completed  net request after " + str(wait_time) + " seconds")
+                # I think I want to adjust this so all the items are checked within the repairDB function instead of supplying it a list
+                if wait_time > 60*12:
+                    repairList = {}
+                    # if the worker is not already running, repair the DB
+                    if not self.repairWorker.getStatus()["Running"][0]:
+                        for item in self.localList:
+                            # this will just force repairDB to update ever item since all items haven't been updated in 23 minutes
+                            # this assumes that the request failed due to the host device not being conencted to the internet
+                            # should be adjusted later
+                            repairList[item[0]] = 0
+                        self.repairWorker = Worker(self.repairDB, repairList)
+                        self.threadpool.start(self.repairWorker)
+                return data
+            except Exception as e:
+                pass
+
 class StatusIndicator(QWidget):
+    """Circular indicator widget for showing app status
+     Main status indicated via color, tooltip shows details on hover"""
     PRESETS = {
         "initializing": QColor("#FFFFFF"),
-        "ok": QColor("#41e968"),
-        "working": QColor("#f3a033"),
-        "error": QColor("#e53935"),
+        "ok": QColor("#41e968"), #normal app behavior
+        "working": QColor("#f5cd49"), #background tasks in progress (database rebuilds, )
+        "warning": QColor("#d16806"), #potential issue
+        "error": QColor("#db4c0a"), #critical error (refused connections, unhandled exceptions)
         "off": QColor("#808080")
     }
     def __init__(self, parent=None, diameter=14):
@@ -90,9 +186,8 @@ class StatusIndicator(QWidget):
         self.setToolTip("Status: unset")
 
     def set_status(self, name_or_color, tooltip: str | None = None):
-        """Set named status (ok/warn/error/off/busy) or pass a QColor / hex string.
-        Optionally update the tooltip text.
-        """
+        """Set named status (ok/warn/error/off/busy) or pass a QColor / hex string
+        Optionally update the tooltip text"""
         if isinstance(name_or_color, QColor):
             self._color = name_or_color
         else:
@@ -131,7 +226,11 @@ class StatusIndicator(QWidget):
         QToolTip.hideText()
         super().leaveEvent(event)
 
-class alert:
+class Alert:
+    """Represents a 5m alert detected in itemPriceLoop
+    Each alert stores id, name, lowPriceChange, highPriceChange, lowVolChange, highVolChange, timestamp
+    All alerts are stored in dict _alerts keyed by id"""
+    _alerts = {}
     def __init__(self, id, name, lowPriceChange, highPriceChange, lowVolChange, highVolChange, timestamp):
         self.id = str(id)
         self.name = str(name)
@@ -140,27 +239,211 @@ class alert:
         self.lowVolChange = f"{lowVolChange:.2f}%"
         self.highVolChange = f"{highVolChange:.2f}%"
         self.timestamp = str(timestamp)
+        self.startTimestamp = str(timestamp)
+        Alert._alerts[self.id] = self
     
-class signals(QObject):
-    #indicates new price update. Includes unix timestamp of last update
+    @classmethod
+    def updateAlert(cls, id, name, lowPriceChange, highPriceChange, lowVolChange, highVolChange, timestamp):
+        """update an existing alert by id with new values"""
+        if id in cls._alerts:
+            a = cls._alerts[str(id)]
+            a.name = str(name)
+            a.lowPriceChange = f"{lowPriceChange:.2f}%"
+            a.highPriceChange = f"{highPriceChange:.2f}%"
+            a.lowVolChange = f"{lowVolChange:.2f}%"
+            a.highVolChange = f"{highVolChange:.2f}%"
+            a.timestamp = str(timestamp)
+        else:
+            print("Attempted to update nonexistent alert: " + str(id))
+    
+    @classmethod
+    def getAlerts(cls):
+        """returns dict of alerts keyed by id as stored in class"""
+        return cls._alerts
+    
+    @classmethod
+    def getAlertsList(cls):
+        """ returns ordered list of alert objects
+        latest timestamp first, if tied then highest startTimeStamp, if tied then highest highVolChange"""
+        return sorted(cls._alerts.values(), 
+            key=lambda a: (-int(a.timestamp), -int(a.startTimestamp), -float(a.highVolChange.rstrip('%'))))
+    
+    @classmethod
+    def removeOldAlerts(cls, cutoffTime):
+        """removes alerts older than cutofftime (unix timestamp)"""
+        removeIDs = []
+        for a in cls._alerts:
+            if int(cls._alerts[a].timestamp) < cutoffTime:
+                removeIDs.append(a)
+        for id in removeIDs:
+            del cls._alerts[id]
+    
+    @classmethod
+    def alertExists(cls,id):
+        """returns true if alert mathching id exists"""
+        return id in cls._alerts
+    @classmethod
+    def del_alert(cls, id):
+        try:
+            del cls._alerts[id]
+        except Exception:
+            pass
+
+class signals(QObject): #organize this better
     newUpdate = pyqtSignal(int)
-    #indicates new alerts.  
     newAlerts = pyqtSignal(list, int)
     newItem = pyqtSignal(str)
-    graphReady = pyqtSignal(object)
+    
+
     #GUI updating requests
+    graphReady = pyqtSignal(object)
     progBarChange = pyqtSignal(int)
     loadTextChange = pyqtSignal(str)
+
+
     buildDBComplete = pyqtSignal()
     priceHistoryComplete = pyqtSignal()
     killPriceLoop = pyqtSignal()
     alertConfigSaved = pyqtSignal()
 
-    newInProgressItem = pyqtSignal(object)
-    newProgressUpdate = pyqtSignal(object)
-    inProgressItemComplete = pyqtSignal(object)
-    newUpdate = pyqtSignal(int)
+    statusChange = pyqtSignal(object)
 
+    newUpdate = pyqtSignal(int)
+    newQuickAlerts = pyqtSignal(list)
+class ContextMenu(QFrame):
+    """Custom context menu widget that appears at cursor position.
+    Emits actionSelected(action_name) when user clicks an option.
+    Closes on outside clicks, Escape key, or action selection.
+    """
+    new_quickAlert_mute = pyqtSignal(str, int)
+    new_alert_mute = pyqtSignal(str, int)
+    def __init__(self, parent = None, table=None, item_id = None):
+        super().__init__(parent)
+        self.ui = Ui_contextMenu()
+        self.ui.setupUi(self)
+        self.setup_signals()
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
+
+        self.item_id = item_id
+
+
+        parentTable = table.objectName()
+        if parentTable == "alert_list" or parentTable == "page_alert_list":
+            self.ui.alerts_check.setChecked(True)
+        elif parentTable == "page_quickAlerts_list":
+            self.ui.quickAlerts_check.setChecked(True)
+
+        self._global_filter_installed = False
+
+    def setup_signals(self):
+        self.ui.m_30_button.clicked.connect(self.m_30_button_clicked)
+        self.ui.h_1_button.clicked.connect(self.h_1_button_clicked)
+        self.ui.h_4_button.clicked.connect(self.h_4_button_clicked)
+        self.ui.h_8_button.clicked.connect(self.h_8_button_clicked)
+        self.ui.d_1_button.clicked.connect(self.d_1_button_clicked)
+        self.ui.inf_button.clicked.connect(self.inf_button_clicked)
+
+        self.ui.mute_button.clicked.connect(self.custom_time_entered)
+
+        self.ui.custom_time_entry.returnPressed.connect(self.custom_time_entered)
+
+    def m_30_button_clicked(self):
+        mute_time = 30*60
+        self.timeSelected(mute_time)
+    def h_1_button_clicked(self):
+        mute_time = 1*60*60
+        self.timeSelected(mute_time)
+    def h_4_button_clicked(self):
+        mute_time = 1*60*60*4
+        self.timeSelected(mute_time)
+    def h_8_button_clicked(self):
+        mute_time = 1*60*60*8
+        self.timeSelected(mute_time)
+    def d_1_button_clicked(self):
+        mute_time = 1*60*60*24
+        self.timeSelected(mute_time)
+    def inf_button_clicked(self):
+        mute_time = -1
+        self.timeSelected(mute_time)
+
+    def custom_time_entered(self):
+        enteredString = self.ui.custom_time_entry.text()
+        if enteredString == None:
+            mute_time = -1
+            self.timeSelected(mute_time)
+        else:
+            mute_time = textToTime(enteredString)
+            if mute_time == None:
+                print("no valid time entered")
+            else:
+                self.timeSelected(mute_time)
+
+    def timeSelected(self, mute_time):
+        if not mute_time == -1:
+            if self.ui.quickAlerts_check.isChecked():
+                self.new_quickAlert_mute.emit(self.item_id, mute_time)
+            if self.ui.alerts_check.isChecked():
+                self.new_alert_mute.emit(self.item_id, mute_time)
+        self.close()
+    
+    def keyPressEvent(self, event: QKeyEvent):
+        """Close on Escape."""
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()
+        else:
+            super().keyPressEvent(event)
+    
+    def eventFilter(self, obj, event):
+        """Detect clicks outside the menu and close."""
+        # Only process mouse button press events
+        if event.type() == QEvent.Type.MouseButtonPress:
+            # Check if the click was outside this menu
+            menu_geo = self.geometry()
+            pos = QCursor.pos()
+
+            # If click is outside menu bounds, close it
+            if not menu_geo.contains(self.parent().mapFromGlobal(pos)):
+                self.close()
+                return False  # let the event continue
+        
+        return super().eventFilter(obj, event)
+    
+    def hideEvent(self, event):
+        """Uninstall the global event filter when menu closes."""
+        if self._global_filter_installed:
+            QApplication.instance().removeEventFilter(self)
+            self._global_filter_installed = False
+    
+        super().hideEvent(event)
+    
+    def show_at_cursor(self):
+        """Show the menu at the current cursor position."""
+        pos = self.parent().mapFromGlobal(QCursor.pos())
+        self.move(pos.x(), pos.y())
+        
+
+        # Ensure the menu stays on-screen (adjust if it goes off the right/bottom edge)
+        app_geo = self.parent().size()
+        menu_geo = self.size() # includes window frame
+        
+        # Check if menu extends past right edge
+        if menu_geo.width() + pos.x()  > app_geo.width():
+            self.move(-menu_geo.width() + app_geo.width(), pos.y())
+        
+        # Check if menu extends past bottom edge
+        if menu_geo.height() + pos.y() > app_geo.height():
+            self.move(pos.x(), -menu_geo.height() + app_geo.height())
+
+        if not self._global_filter_installed:
+            QApplication.instance().installEventFilter(self)
+            self._global_filter_installed = True
+            
+        self.setFocus()
+        self.raise_()
+        self.show()
+        self.activateWindow()
 class Worker(QRunnable):
     """Worker thread."""
     def __init__(self, fn, *args, **kwargs):
@@ -169,7 +452,12 @@ class Worker(QRunnable):
         self.args = args
         self.kwargs = kwargs
         self.is_killed = False
-        self.statusString = ''
+        self.status = {"Running": [False, ""],
+                        "workItem":  [False, ""],
+                        "Warning": [False, ""],
+                        "Error": [False, ""]}
+        
+
 
     @pyqtSlot()
     def run(self):
@@ -178,10 +466,11 @@ class Worker(QRunnable):
             # register self as active
             with active_workers_lock:
                 active_workers.add(self)
-            print(f"Worker starting: {self.fn.__name__}")
+            self.status["Running"] = [True, f"Running {self.fn.__name__}"]
+            print(f"Worker starting: {self.fn.__name__}\n")
             self.is_killed = False
             self.fn(*self.args, **self.kwargs, worker= self)
-            print(f"Worker completed: {self.fn.__name__}")
+            print(f"Worker completed: {self.fn.__name__}\n")
         except Exception as e:
             print(f"Error in worker thread: {e}")
             traceback.print_exc()
@@ -189,24 +478,62 @@ class Worker(QRunnable):
             with active_workers_lock:
                 try:
                     active_workers.discard(self)
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"failed  to discard worker after completion {e}")
+            self.status["Running"] = [False, ""]
     def kill(self):
         self.is_killed = True
-    def getStatusString(self):
-        return self.statusString
-    def setStatusString(self, status):
-        self.statusString = status
+    def getStatus(self):
+        return self.status
+    def updateStatus(self, statusType, status):
+        """
+        statusType is a string that indicates status to be updated ("workItem", "Warning", or "Error")
+        status is a list containing first the boolean indicating whether the status is active,
+        and second a string describing the status if it is active.
+        """
+        try:
+            if statusType in self.status:
+                if len(status) == 2:
+                    if isinstance(status[0], bool) and isinstance(status[1], str):
+                        self.status[statusType] = status
+                    else:
+                        print("status contains invalid types.  Expected [bool, str]")
+                else:
+                    print("status contains invalid number of elements. Expected 2 [bool, str]")
+            else:
+                print("invalid statusType. Expected 'workItem', 'Warning', or 'Error'")
+        except Exception as e:
+            print(f"Error updating worker status: {e}")
 
 def get_active_workers_snapshot():
+    """Returns a snapshot of currently active workers as a list"""
     with active_workers_lock:
         return list(active_workers)
 class MainWindow(QMainWindow):
     def __init__(self):
         print("starting __init__...")
         try:
-            self.inProgressItems = []
+            self.repairWorker = None
+            self.statusWorkers = []
             self.localList = []
+            self.alertMutes = {}
+            self.quickAlertMutes = {}
+            self.currentItemID = None
+            self.currentTimeFrame = "24h"
+            if os.path.isfile(quickAlertMuteFile):
+                try:
+                    with open(quickAlertMuteFile, "r") as f:
+                        self.quickAlertMutes = json.load(f)
+                except Exception:
+                    pass
+            if os.path.isfile(alertMuteFile):
+                try:
+                    with open(alertMuteFile, "r") as f:
+                        self.alertMutes = json.load(f)
+                except Exception:
+                    pass
+            
+            self.context_menu = None
             self.threadpool = QThreadPool()
             thread_count = self.threadpool.maxThreadCount()
             print(f"Multithreading with maximum {thread_count} threads")
@@ -214,14 +541,36 @@ class MainWindow(QMainWindow):
             super(MainWindow, self).__init__()
             self.ui = Ui_MainWindow()
             self.ui.setupUi(self)
-            print("filter_config_widget:", self.ui.filter_config_widget.metaObject().className(), self.ui.filter_config_widget.objectName())
-            print("alert_config_widget: ", self.ui.alert_config_widget.metaObject().className(), self.ui.alert_config_widget.objectName())
-            for name in ("filter_config_widget", "alert_config_widget"):
-                w = getattr(self.ui, name, None)
-                if w is not None:
-                    # allow QSS to paint the widget background
-                    w.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-                    w.setAutoFillBackground(True)
+            
+            # history bar setup
+            try:
+                # get header bar height for sidebar positioning
+                header_height = self.ui.header_bar.height() if hasattr(self.ui, 'header_bar') else 40
+                    
+                # creating sidebar as child of main_widget, positioned below header
+                self.sidebar = SideBar(self.ui.main_widget, top_offset=header_height)
+                self.sidebar.raise_()  # Ensure it draws on top
+                    
+                # event filter to handle main_widget resizing
+                class SidebarResizeFilter(QObject):
+                    def __init__(self, sidebar):
+                        super().__init__()
+                        self.sidebar = sidebar
+                    def eventFilter(self, obj, event):
+                        if event.type() == QEvent.Type.Resize:
+                            self.sidebar.position_sidebar()
+                        return False
+                    
+                self.sidebar_filter = SidebarResizeFilter(self.sidebar)
+                self.ui.main_widget.installEventFilter(self.sidebar_filter)
+            except Exception as e:
+                print(f"Error setting up sidebar: {e}")
+                import traceback
+                traceback.print_exc()
+
+            self.ui.page_quickAlerts_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            self.ui.page_alert_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            self.ui.alert_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
             #status indicator setup
             try:
                 placeholder = self.ui.indicator_widget  # placeholder created by .ui
@@ -252,12 +601,17 @@ class MainWindow(QMainWindow):
             self.loopWorker = Worker(self.itemPriceLoop)
             self.signals = signals()
             self.setup_signals()
-
-            self.ui.history_list.setVisible(False)
             self.updateConfigBoxes()
 
             #graph page setup
             self.ui.main_stack_widget.setCurrentIndex(0)
+
+            # hiding unimplemented / testing features
+            self.ui.alert_p_tool_drawer_button.setVisible(False)
+
+            self.ui.alert_page_tools_frame.setVisible(False)
+
+            self.ui.stylesheet_button.setVisible(False)
 
             #confirm that database exists and build has been finished
             if os.path.isfile("database.db"):
@@ -276,7 +630,7 @@ class MainWindow(QMainWindow):
                             tableName = "priceHistory5m.itemID" + item[0]
                             command = "SELECT timeStamp from " + tableName + " ORDER BY timeStamp DESC LIMIT 1"
                             lastEntryTime = int(cursor.execute(command).fetchone()[0])
-                            if (curTime - lastEntryTime) > 60*20:
+                            if (curTime - lastEntryTime) > 60*23: #23 minutes
                                 repairList[item[0]] = lastEntryTime
                         if len(repairList) > 0:
                             print(f"found ({len(repairList)}) items needing repair")
@@ -302,15 +656,37 @@ class MainWindow(QMainWindow):
     def setup_signals(self):
         #button connections
         self.ui.rebuild_db_button.clicked.connect(self.rebuildDBPressed)
-        self.ui.history_button.toggled['bool'].connect(self.onHistoryButtonToggle)
+        #self.ui.history_button.toggled['bool'].connect(self.onHistoryButtonToggle)
         self.ui.config_button.clicked.connect(self.onConfigButtonToggle)
         self.ui.graph_button.clicked.connect(self.onGraphButtonToggle)
+        self.ui.alerts_button.clicked.connect(self.onAlertsButtonToggle)
         self.ui.save_alert_button.clicked.connect(self.saveAlertConfig)
+
+        self.ui.graph_refresh_button.clicked.connect(self.onGraphRefreshButtonClicked)
+        self.ui.graph_web_button.clicked.connect(self.fetchItemWebpage)
+        self.ui.one_day_button.clicked.connect(self.onOneDayButtonClicked)
+        self.ui.two_week_button.clicked.connect(self.onTwoWeekButtonClicked)
+        self.ui.three_month_button.clicked.connect(self.onThreeMonthButtonClicked)
+        self.ui.one_year_button.clicked.connect(self.onOneYearButtonClicked)
+
+        self.ui.main_stack_widget.currentChanged['int'].connect(self.pageChange)
+
+        self.ui.stylesheet_button.clicked.connect(self.updateStylesheet)
         
         self.ui.alert_list.itemDoubleClicked.connect(self.onAlertDoubleClick)
+        self.ui.page_alert_list.itemDoubleClicked.connect(self.onAlertDoubleClick)
+        self.ui.page_quickAlerts_list.itemDoubleClicked.connect(self.onAlertDoubleClick)
+
+
         #loading screen control
         self.signals.progBarChange.connect(self.updateBar)
         self.signals.loadTextChange.connect(self.updateLoadingText)
+
+        # table context menus
+        self.ui.page_quickAlerts_list.customContextMenuRequested.connect(self.show_context_menu)
+        self.ui.page_alert_list.customContextMenuRequested.connect(self.show_context_menu)
+        self.ui.alert_list.customContextMenuRequested.connect(self.show_context_menu)
+
 
         self.signals.buildDBComplete.connect(self.startPriceLoop)
         self.signals.priceHistoryComplete.connect(self.priceHistoryComplete)
@@ -320,47 +696,199 @@ class MainWindow(QMainWindow):
         self.signals.newAlerts.connect(self.updateAlerts)
         self.signals.alertConfigSaved.connect(self.updateConfigBoxes)
 
-        self.signals.newInProgressItem.connect(self.addInProgressItem)
-        self.signals.newProgressUpdate.connect(self.updateStatus)
-        self.signals.inProgressItemComplete.connect(self.removeInProgressItem)
+        self.signals.statusChange.connect(self.updateStatusIndicator)
+        
         self.signals.newUpdate.connect(self.newUpdate)
+        self.signals.newQuickAlerts.connect(self.updateQuickAlerts)
+        
+        # history item clicks
+        self.sidebar.history_item_clicked.connect(self.onHistoryItemClicked)
+
+    def updateStylesheet(self):
+        print("updating stylesheet")
+        try:
+            with open("theme.qss") as theme:
+                theme_str = theme.read()
+                app.setStyleSheet(theme_str)
+        except Exception as e:
+            print(f"Error updating stylesheet: {e}")
+
+    def show_context_menu(self, pos: QPoint):
+        sender = self.sender()
+        if  isinstance(sender, QTableWidget):
+            index = sender.indexAt(pos)
+            if index.isValid():
+                itemString = sender.item(index.row(), 0).text()
+                print(f"context menu requested for {itemString}")
+                if self.context_menu is not None:
+                    self.context_menu.close()
+                # create new context menu with actions
+                try:
+                    item_id = itemString.split(":")[0].strip()
+                    self.context_menu = ContextMenu(self, table = sender, item_id = item_id)
+                    self.context_menu.new_quickAlert_mute.connect(self.add_quickAlert_block)
+                    self.context_menu.new_alert_mute.connect(self.add_alert_block)
+                    self.context_menu.show_at_cursor()
+                except Exception as e:
+                    print(e)
+    
+    def add_alert_block(self, item_id: str, mute_time: int):
+        """Add to to or update alert block list"""
+        try:
+            print(f"muted alerts for id {item_id} for {mute_time}s")
+            if item_id in self.alertMutes:
+                del self.alertMutes[item_id]
+            if mute_time > 0:
+                timestamp = int(time.time())
+                block_expiry = timestamp + mute_time
+                self.alertMutes[item_id] = block_expiry
+                self.remove_blocked_alerts()
+        except Exception as e:
+            print(e)
+        try:
+            with open(alertMuteFile, "w") as f:
+                json.dump(self.alertMutes, f)
+                print("alert mutes saved")
+        except Exception as e:
+            print(e)
+    def add_quickAlert_block(self, item_id: str, mute_time: int):
+        """Add to to or update alert block list"""
+        try:
+            print(f"muted quickAlerts for id {item_id} for {mute_time}s")
+            if item_id in self.quickAlertMutes:
+                del self.quickAlertMutes[item_id]
+            if mute_time > 0:
+                timestamp = int(time.time())
+                block_expiry = timestamp + mute_time
+                self.quickAlertMutes[item_id] = block_expiry
+                self.remove_blocked_quickAlerts()
+        except Exception as e:
+            print(e)
+        try:
+            with open(quickAlertMuteFile, "w") as f:
+                json.dump(self.quickAlertMutes, f)
+                print("quick alert mutes saved")
+        except Exception as e:
+            print(e)
+
+    def remove_blocked_alerts(self):
+            #both alert tables should always have the same content
+        num_rows = self.ui.alert_list.rowCount()
+        for i in reversed(range(num_rows)):
+            itemString = self.ui.alert_list.item(i, 0).text()
+            id_str = itemString.split(':')[0]
+            if id_str in self.alertMutes:
+                if time.time() > self.alertMutes[id_str]:
+                    del self.alertMutes[id_str]
+                else:
+                    Alert.del_alert(id_str)
+                    self.ui.alert_list.removeRow(i)
+                    self.ui.page_alert_list.removeRow(i)
+
+    def remove_blocked_quickAlerts(self):
+        num_rows = self.ui.page_quickAlerts_list.rowCount()
+        for i in reversed(range(num_rows)):
+            itemString = self.ui.page_quickAlerts_list.item(i, 0).text()
+            id_str = itemString.split(':')[0]
+            if id_str in self.quickAlertMutes:
+                if time.time() > self.quickAlertMutes[id_str]:
+                    del self.quickAlertMutes[id_str]
+                else:
+                    self.ui.page_quickAlerts_list.removeRow(i)
 
     def setupAlertList(self):
-        #minimumSectionSize : int
         self.ui.alert_list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.ui.alert_list.hideColumn(6)
+        self.ui.page_alert_list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.ui.page_quickAlerts_list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
+        self.ui.alert_list.horizontalHeader().setFixedHeight(32)
+
+        self.ui.page_quickAlerts_list.horizontalHeader().setFixedHeight(32)
+        self.ui.page_alert_list.horizontalHeader().setFixedHeight(40)
+        
     def onAlertDoubleClick(self, item):
         self.ui.alert_list.clearSelection()
         if item.column() == 0:
             itemID = item.text().split(":")[0]
             self.signals.newItem.emit(itemID)
             self.ui.main_stack_widget.setCurrentIndex(1)
+            self.ui.graph_button.setChecked(True)
 
     def newUpdate(self, timestamp):
         time = datetime.fromtimestamp(timestamp)
         self.ui.last_update_label.setText("Last Updated: " + datetime.strftime(time, "%H:%M"))
+        self.updateAlerts(timestamp)
 
-    def addInProgressItem(self, worker):
-        self.inProgressItems.append(worker)
-        self.updateStatus()
+    def updateQuickAlerts(self, quickAlerts):
+        self.ui.page_quickAlerts_list.setRowCount(0)
+        for alert in quickAlerts:
+            row = self.ui.page_quickAlerts_list.rowCount()
+            self.ui.page_quickAlerts_list.insertRow(row)
+            self.ui.page_quickAlerts_list.setItem(row, 0, QTableWidgetItem(f"{alert['id']}: {alert['name']}"))
+            self.ui.page_quickAlerts_list.setItem(row, 1, QTableWidgetItem(alert["highPrice"]))
+            self.ui.page_quickAlerts_list.setItem(row, 2, QTableWidgetItem(alert["highPriceChange"]))
+            self.ui.page_quickAlerts_list.setItem(row, 3, QTableWidgetItem(alert["highTime"]))
 
-    def updateStatus(self):
-        if len(self.inProgressItems) == 0:
-            self.status_indicator.set_status(name_or_color="ok", tooltip= "No background tasks")
+    def updateStatusIndicator(self, worker):
+        try:
+            updatedStatus = worker.getStatus()
+        except Exception as e:
+            print(f"Error getting worker status: {e}")
+            try:
+                self.statusWorkers.remove(worker)
+            except Exception:
+                pass
+        if not (updatedStatus["Error"][0] or updatedStatus["Warning"][0] or updatedStatus["workItem"][0]):
+            # no active status, try to remove worker from statusWorkers list.
+            if worker in self.statusWorkers:
+                self.statusWorkers.remove(worker)
+            else:
+                print("Failed to find worker with no status in statusWorkers list")
         else:
-            statusText = ""
-            for worker in self.inProgressItems:
-                statusText = (statusText + worker.getStatusString() + "\n")
-            self.status_indicator.set_status(name_or_color="working", tooltip=statusText)
-
-    def removeInProgressItem(self, worker):
-        self.inProgressItems.remove(worker)
-        self.updateStatus()
+            if not worker in self.statusWorkers:
+                self.statusWorkers.append(worker)
+        workItemString = ""
+        warningString = ""
+        errorString = ""
+        for w in self.statusWorkers:
+            try:
+                status = w.getStatus()
+            except Exception as e:
+                print(f"Error getting worker status: {e}")
+            try:
+                self.statusWorkers.remove(w)
+            except Exception:
+                pass
+            
+            if status["workItem"][0]:
+                workItemString += status["workItem"][1] + "\n"
+            if status["Warning"][0]:
+                warningString += status["Warning"][1] + "\n"
+            if status["Error"][0]:
+                errorString += status["Error"][1] + "\n"
+        if not errorString == "":
+            statusString = "Error:\n" + errorString
+            self.status_indicator.set_status("error", statusString)
+        elif not warningString == "":
+            statusString = "Warning:\n" + warningString
+            self.status_indicator.set_status("warning", statusString)
+        elif not workItemString == "":
+            statusString = "In progress:\n" + workItemString
+            self.status_indicator.set_status("working", statusString)
+        else:
+            self.status_indicator.set_status("ok", "")
 
     def newItem(self, itemID):
         print("new item received:", itemID)
         self.updateGraphPage(itemID)
+        item = list(filter(lambda tup: itemID in tup, self.localList))
+        if len(item) > 1:
+            print("found more than one result when searching for item in localList")
+        elif len(item) ==  0:
+            print("found no results when searching for item in localList")
+        else:
+            item_name  = item[0][1]
+            self.sidebar.add_history_item(item_name, itemID)
 
     def updatePlot(self, fig):
         html = fig.to_html(include_plotlyjs='cdn')
@@ -376,15 +904,22 @@ class MainWindow(QMainWindow):
     def activateMainWindow(self):
         print("Setting up main window")
         self.startPriceLoop()
-        self.updateGraphPage(self.localList[0][0])
+        itemID = self.localList[0][0]
+        self.updateGraphPage(itemID)
+        self.currentItemID = itemID
+        self.currentTimeFrame = "24h"
         self.ui.main_stack_widget.setCurrentIndex(1)
         self.ui.graph_button.setEnabled(True)
         self.ui.graph_button.setChecked(True)
+        self.ui.alerts_button.setEnabled(True)
+
         self.setupSearch()
         self.ui.search_bar.setEnabled(True)
         print("main window setup complete")
        
-    def updateGraphPage(self, itemID):
+    def updateGraphPage(self, itemID = None):
+        if itemID is None:
+            itemID = self.currentItemID
         print(f"updating graph with {itemID}")
         try:
             database = sqlite3.connect('database.db')
@@ -681,39 +1216,110 @@ class MainWindow(QMainWindow):
         self.ui.main_stack_widget.setCurrentIndex(0)
     def onHistoryButtonToggle(self, state):
         if state:
-            self.ui.history_list.setVisible(True)
+            #self.ui.history_list.setVisible(True)
+            print("temp")
         else:
-            self.ui.history_list.setVisible(False)
+            #self.ui.history_list.setVisible(False)
+            print("temp")
     
-    def updateAlerts(self, alerts, updateTime):
-        for alert in alerts:
-            self.ui.alert_list.insertRow(0)
-            self.ui.alert_list.setItem(0, 0, QTableWidgetItem(f"{alert.id}: {alert.name} "))
-            self.ui.alert_list.setItem(0, 1, QTableWidgetItem(alert.highPriceChange))
-            self.ui.alert_list.setItem(0, 2, QTableWidgetItem(alert.lowPriceChange))
-            self.ui.alert_list.setItem(0, 3, QTableWidgetItem(alert.highVolChange))
-            self.ui.alert_list.setItem(0, 4, QTableWidgetItem(alert.lowVolChange))
+    def onHistoryItemClicked(self, item_id, item_name):
+        print(f"History item clicked: {item_name} (ID: {item_id})")
+        self.newItem(item_id)
+    
+    def onAlertsButtonToggle(self):
+        self.ui.main_stack_widget.setCurrentIndex(2)
+    
+    def fetchItemWebpage(self):
+        try:
+            url  = web_lookup_url + self.currentItemID
+            webbrowser.open(url)
+        except Exception as e:
+            print(f"Error opening web page: {e}")
+    def onOneDayButtonClicked(self):
+        #  debounce to prevent spam requests if someone tries to mash the buttons
+        self.ui.one_day_button.setEnabled(False)
+        QTimer.singleShot(1000, lambda: self.ui.one_day_button.setEnabled(True))
+        self.currentTimeFrame = "24h"
+        self.updateGraphPage()
 
-            time = datetime.fromtimestamp(int(alert.timestamp))
-            self.ui.alert_list.setItem(0, 5, QTableWidgetItem(datetime.strftime(time, "%H:%M")))
-            self.ui.alert_list.setItem(0, 6, QTableWidgetItem(alert.timestamp))
-            for j in range(self.ui.alert_list.columnCount()):
-                    self.ui.alert_list.item(0, j).setForeground(QBrush(QColor(229, 137, 255)))
-        i = 0
-        while i < self.ui.alert_list.rowCount():
-            if int(self.ui.alert_list.item(i, 6).text()) != updateTime:
-                print("make it yellow or gray or something to show it's old")
-                for j in range(self.ui.alert_list.columnCount()):
-                    self.ui.alert_list.item(i, j).setForeground(QBrush(QColor(255, 254, 178)))
-                if updateTime - int(self.ui.alert_list.item(i, 6).text())  >= 8*60: # over 8 minutes old
-                    print("removing old alert")
-                    self.ui.alert_list.removeRow(i)
+    def onTwoWeekButtonClicked(self):
+        #  debounce to prevent spam requests if someone tries to mash the buttons
+        self.ui.two_week_button.setEnabled(False)
+        QTimer.singleShot(1000, lambda: self.ui.two_week_button.setEnabled(True))
+        self.currentTimeFrame = "2w"
+        self.updateGraphPage()
+    def onThreeMonthButtonClicked(self):
+        #  debounce to prevent spam requests if someone tries to mash the buttons
+        self.ui.three_month_button.setEnabled(False)
+        QTimer.singleShot(1000, lambda: self.ui.three_month_button.setEnabled(True))
+        self.currentTimeFrame = "3m"
+        self.updateGraphPage()
+    def onOneYearButtonClicked(self):
+        #  debounce to prevent spam requests if someone tries to mash the buttons
+        self.ui.one_year_button.setEnabled(False)
+        QTimer.singleShot(1000, lambda: self.ui.one_year_button.setEnabled(True))
+        self.currentTimeFrame = "1y"
+        self.updateGraphPage()
+    def onGraphRefreshButtonClicked(self):
+        #  debounce to prevent spam requests if someone tries to mash the buttons
+        self.ui.graph_refresh_button.setEnabled(False)
+        QTimer.singleShot(1000, lambda: self.ui.graph_refresh_button.setEnabled(True))
+        self.updateGraphPage()
+
+    def pageChange(self, index):
+        if index == 0:
+            self.ui.config_button.setEnabled(True)
+            self.ui.config_button.setChecked(True)
+            self.ui.alert_scroll_area.setVisible(True)
+        elif index == 1:
+            self.ui.graph_button.setEnabled(True)
+            self.ui.graph_button.setChecked(True)
+            self.ui.alert_scroll_area.setVisible(True)
+        if index == 2:
+            self.ui.alerts_button.setEnabled(True)
+            self.ui.alerts_button.setChecked(True)
+            self.ui.alert_scroll_area.setVisible(False)
+        else:
+            self.ui.alert_scroll_area.setVisible(True)
+
+    def updateAlerts(self, updateTime):
+        Alert.removeOldAlerts(updateTime - 10*60) # remove alerts older than 10 minutes (since last update)
+        alerts = Alert.getAlertsList()
+        if len(alerts) > 0:
+            for i in range(len(alerts)):
+                a = alerts[i]
+                self.ui.alert_list.insertRow(i)
+                self.ui.page_alert_list.insertRow(i)
+
+                self.ui.alert_list.setItem(i, 0, QTableWidgetItem(f"{a.id}: {a.name} "))
+                self.ui.page_alert_list.setItem(i, 0, QTableWidgetItem(f"{a.id}: {a.name} "))
+
+                self.ui.alert_list.setItem(i, 1, QTableWidgetItem(a.highPriceChange))
+                self.ui.page_alert_list.setItem(i, 1, QTableWidgetItem(a.highPriceChange))
+
+                self.ui.alert_list.setItem(i, 2, QTableWidgetItem(a.lowPriceChange))
+                self.ui.page_alert_list.setItem(i, 2, QTableWidgetItem(a.lowPriceChange))
+
+                self.ui.alert_list.setItem(i, 3, QTableWidgetItem(a.highVolChange))
+                self.ui.page_alert_list.setItem(i, 3, QTableWidgetItem(a.highVolChange))
+
+                self.ui.alert_list.setItem(i, 4, QTableWidgetItem(a.lowVolChange))
+                self.ui.page_alert_list.setItem(i, 4, QTableWidgetItem(a.lowVolChange))
+
+                time = datetime.fromtimestamp(int(a.timestamp))
+                self.ui.alert_list.setItem(i, 5, QTableWidgetItem(datetime.strftime(time, "%H:%M")))
+                self.ui.page_alert_list.setItem(i, 5, QTableWidgetItem(datetime.strftime(time, "%H:%M")))
+
+                if int(a.timestamp)!= updateTime: # old alert coloring
+                    for j in range(self.ui.alert_list.columnCount()):
+                        self.ui.alert_list.item(i, j).setForeground(QBrush(QColor(255, 254, 178)))
+                        self.ui.page_alert_list.item(i, j).setForeground(QBrush(QColor(255, 254, 178)))
                 else:
-                    # i is only iterated when the row stays in the table to prevent indexing errors
-                    i = i+1
-            else:
-                # i is only iterated when the row stays in the table to prevent indexing errors
-                i = i+1
+                    for j in range(self.ui.alert_list.columnCount()): # new alert coloring
+                        self.ui.alert_list.item(i, j).setForeground(QBrush(QColor(229, 137, 255)))
+                        self.ui.page_alert_list.item(i, j).setForeground(QBrush(QColor(229, 137, 255)))
+        self.ui.alert_list.setRowCount(len(alerts))
+        self.ui.page_alert_list.setRowCount(len(alerts))
 
     def rebuildDBPressed(self):
         self.ui.splash_stacked.setCurrentIndex(1)
@@ -797,7 +1403,7 @@ class MainWindow(QMainWindow):
             if query.fetchone() == None:
                 command = "CREATE TABLE " + tableName + " " + priceHistory5mValues
                 cursor.execute(command)
-                response = json.loads(requests.get(priceHistory5mURL + ''.join(str(value) for value in id), headers=headers).text).get('data')
+                response = json.loads(net_request(self=self, url=(priceHistory5mURL + ''.join(str(value) for value in id)), worker=worker).text).get('data')
                 for item in response:
                     timestamp = item.get('timestamp')
                     avgHighPrice = item.get('avgHighPrice')
@@ -836,16 +1442,16 @@ class MainWindow(QMainWindow):
         while True:
             if worker.is_killed:
                 break
-            response = json.loads(requests.get(latestURL, headers = headers).text)
+            response = json.loads(net_request(self=self, url=latestURL, worker=worker).text)
             try:
                 data = response.get("data")
                 database = sqlite3.connect('database.db')
                 cursor = database.cursor()
                 cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
                 trackedIDs = cursor.execute('SELECT id from filteredDB WHERE tracked=TRUE').fetchall()
+                quickAlerts = []
                 for id in trackedIDs:
                     id_str = ''.join(str(value) for value in id)
-                    name = cursor.execute(f'SELECT itemName from filteredDB WHERE id = {id_str}').fetchall()
                     highPrice = data.get(id_str).get("high")
                     tableName = "priceHistory5m.itemID" + id_str
                     oneDayAvg = self.getOneDayAvg(database, tableName, lastUpdate)
@@ -853,8 +1459,28 @@ class MainWindow(QMainWindow):
                         highPriceChange = (highPrice / oneDayAvg.get("avgHighPrice"))*100 - 100
                     except:
                         highPriceChange = 0
-                    if highPriceChange < -50:
-                        print(f"{id_str}: {name} highPrice: {highPrice}  Change: {highPriceChange}")
+
+                    # quick alert condition
+                    if highPriceChange < -40:
+                        print(f"quick alert {id_str}")
+                        if id_str in self.quickAlertMutes:
+                            if time.time() > self.quickAlertMutes[id_str]:
+                                del self.quickAlertMutes[id_str]
+                                try:
+                                    with open(quickAlertMuteFile, "w") as f:
+                                        json.dump(self.quickAlertMutes, f)
+                                        print("quick alert mutes saved")
+                                except Exception as e:
+                                    print(e)
+                        if not id_str in self.quickAlertMutes:
+                            name = cursor.execute(f'SELECT itemName from filteredDB WHERE id = {id_str}').fetchall()[0][0]
+                            timestamp = data.get(id_str).get("highTime")
+                            highTime = datetime.fromtimestamp(int(timestamp))
+                            quickAlerts.append({"id": id_str, "name": name, "highPrice": f"{highPrice}", 
+                                                "highPriceChange": f"{highPriceChange:.2f}%", "highTime": datetime.strftime(highTime, "%H:%M")})
+                            print(f"{id_str}: {name} highPrice: {f"{highPrice}"}  Change: {f"{highPriceChange:.2f}%"}")
+                self.signals.newQuickAlerts.emit(quickAlerts)
+                            
             except Exception as e:
                 print(e)
             database.close()
@@ -862,9 +1488,7 @@ class MainWindow(QMainWindow):
                 database = sqlite3.connect('database.db')
                 cursor = database.cursor()
                 cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
-                alerts = []
-                url = "https://prices.runescape.wiki/api/v1/osrs/5m"
-                response = json.loads(requests.get(url, headers = headers).text)
+                response = json.loads(net_request(self=self, url=latest5mURL, worker=worker).text)
                 if response.get('timestamp') > lastUpdate:
                     lastUpdate = response.get('timestamp')
                     print(lastUpdate)
@@ -872,8 +1496,6 @@ class MainWindow(QMainWindow):
                     try:
                         with open(alertConfigFile, "r") as f:
                             alertConfig = json.load(f)
-                            print("Using alert config")
-                            print(alertConfig)
                             minLowPriceChange = alertConfig.get("minLowPriceChange")
                             minHighPriceChange = alertConfig.get("minHighPriceChange")
                             minLowVolChange = alertConfig.get("minLowVolChange")
@@ -929,23 +1551,33 @@ class MainWindow(QMainWindow):
                                         highVolChange = 0
                                     command = "UPDATE filteredDB set lowPrice = ?, highPrice = ?, lowVolume = ?, highVolume = ?, lowPriceChange = ?, highPriceChange = ?, lowVolumeChange = ?, highVolumeChange = ? WHERE id = ?"
                                     cursor.execute(command, (avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume, lowPriceChange, highPriceChange, lowVolChange, highVolChange, id[0]))
+                                    
+                                    # alert conditions
                                     if (lowPriceChange <= -abs(minLowPriceChange) or highPriceChange <= -abs(minHighPriceChange)) and (lowVolChange >= minLowVolChange or highVolChange >= minHighVolChange):
-                                        command = "SELECT itemName FROM filteredDB WHERE id = ?"
-                                        name = cursor.execute(command, id).fetchone()[0]
-                                        a = alert(id= str(id[0]), name = name, lowPriceChange = lowPriceChange, highPriceChange = highPriceChange, 
+                                        if id_str in self.alertMutes:
+                                            if time.time() > self.alertMutes[id_str]:
+                                                del self.alertMutes[id_str]
+                                                try:
+                                                    with open(alertMuteFile, "w") as f:
+                                                        json.dump(self.alertMutes, f)
+                                                        print("alert mutes saved")
+                                                except Exception as e:
+                                                    print(e)
+                                        if not id_str in self.alertMutes:
+                                            command = "SELECT itemName FROM filteredDB WHERE id = ?"
+                                            name = cursor.execute(command, id).fetchone()[0]
+                                            if Alert.alertExists(id[0]):
+                                                Alert.updateAlert(id= id[0], name = name, lowPriceChange = lowPriceChange, highPriceChange = highPriceChange, 
+                                                        lowVolChange = lowVolChange, highVolChange = highVolChange, timestamp = lastUpdate)
+                                            else:
+                                                a = Alert(id= id[0], name = name, lowPriceChange = lowPriceChange, highPriceChange = highPriceChange, 
                                                     lowVolChange = lowVolChange, highVolChange = highVolChange, timestamp = lastUpdate)
-                                        alerts.append(a)
-                                        print(f"{name}: low price {lowPriceChange}%, high price {highPriceChange}%, low volume {lowVolChange}%, high volume {highVolChange}%, timeStamp {lastUpdate}")
-                    self.signals.newAlerts.emit(alerts, lastUpdate)
+                                            print(f"{name}: low price {lowPriceChange}%, high price {highPriceChange}%, low volume {lowVolChange}%, high volume {highVolChange}%, timeStamp {lastUpdate}")
                     self.signals.newUpdate.emit(lastUpdate)
                     database.commit()
                     database.close()
                     timeSinceUpdate = time.time() - lastUpdate
-                    if timeSinceUpdate < 250:
-                        time.sleep(250 - timeSinceUpdate)
-                    else:
-                        print(f"time since last update: {timeSinceUpdate}")
-                        time.sleep(60)
+                    print(f"time since last update: {timeSinceUpdate}")
                 else:
                     database.close()
             time.sleep(30)
@@ -982,10 +1614,10 @@ class MainWindow(QMainWindow):
                 minHourlyVolume = self.ui.mhv_line.text()
             
             try:
-                minBuyLimitValue = textToInt(minBuyLimitValue)
-                maxPrice = textToInt(maxPrice)
-                minHourlyThroughput = textToInt(minHourlyThroughput)
-                minHourlyVolume = textToInt(minHourlyVolume)
+                minBuyLimitValue = textToVal(minBuyLimitValue)
+                maxPrice = textToVal(maxPrice)
+                minHourlyThroughput = textToVal(minHourlyThroughput)
+                minHourlyVolume = textToVal(minHourlyVolume)
             except Exception as e:
                 print("invalid input: ")
                 print(e)
@@ -1020,7 +1652,7 @@ class MainWindow(QMainWindow):
                     time.sleep(1)
 
             #build filtered item list
-            itemList = json.loads(requests.get(itemListURL, headers = headers).text)
+            itemList = json.loads(net_request(self=self, url=itemListURL, worker=worker).text)
             tempItemList = {}
             watchCount = 0
             for item in itemList.keys():
@@ -1079,10 +1711,10 @@ class MainWindow(QMainWindow):
         onlyHighDrops = self.ui.high_price_drop_check.isChecked()
         
         try:
-            minLowPriceChange = textToInt(minLowPriceChange)
-            minHighPriceChange = textToInt(minHighPriceChange)
-            minLowVolChange = textToInt(minLowVolChange)
-            minHighVolChange = textToInt(minHighVolChange)
+            minLowPriceChange = textToVal(minLowPriceChange)
+            minHighPriceChange = textToVal(minHighPriceChange)
+            minLowVolChange = textToVal(minLowVolChange)
+            minHighVolChange = textToVal(minHighVolChange)
         except Exception as e:
             print("invalid input: ")
             print(e)
@@ -1152,31 +1784,72 @@ class MainWindow(QMainWindow):
             avgHighVol = avgHighVol / len(highVolumes)
         return {"avgLowPrice": avgLowPrice, "avgHighPrice": avgHighPrice, "avgLowVol": avgLowVol, "avgHighVol": avgHighVol}
     
-    def plotPrep(self, itemID, worker = None):
-        database = sqlite3.connect('database.db')
-        cursor = database.cursor()
-        cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
-        command = "SELECT name FROM priceHistory5m.sqlite_master WHERE type='table' AND name='itemID" + itemID + "';"
-        query = cursor.execute(command)
-        minTime = time.time() - 24*60*60 #24 hours ago
-        if not query.fetchone() == None:
-            tableName = "priceHistory5m.itemID" + itemID
-            command = "SELECT timestamp, avgHighPrice, avgLowPrice, highPriceVolume, lowPriceVolume FROM " + tableName + " WHERE timestamp >= " + str(minTime) + ";"
-            query = cursor.execute(command)
-            dat = query.fetchall()
-            database.close()
+    def plotPrep(self, itemID=None, worker = None, timeFrame = None):
+        data = None
+        if timeFrame is None:
+            timeFrame = self.currentTimeFrame
+        if itemID is None:
+            itemID = self.currentItemID
 
-            data = {
-                'time': np.fromiter((row[0] for row in dat), dtype=np.int64),
-                'highPrice': np.fromiter((row[1] if row[1] is not None else np.nan for row in dat), dtype=np.float64),
-                'lowPrice':  np.fromiter((row[2] if row[2] is not None else np.nan for row in dat), dtype=np.float64),
-                'highVol':   np.fromiter((row[3] if row[3] is not None else 0 for row in dat), dtype=np.float64),
-                'lowVol':    np.fromiter((row[4] if row[4] is not None else 0 for row in dat), dtype=np.float64)
+
+        if timeFrame == "24h":
+            database = sqlite3.connect('database.db')
+            cursor = database.cursor()
+            cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
+            command = "SELECT name FROM priceHistory5m.sqlite_master WHERE type='table' AND name='itemID" + itemID + "';"
+            query = cursor.execute(command)
+            minTime = time.time() - 24*60*60 #24 hours ago
+            if not query.fetchone() == None:
+                tableName = "priceHistory5m.itemID" + itemID
+                command = "SELECT timestamp, avgHighPrice, avgLowPrice, highPriceVolume, lowPriceVolume FROM " + tableName + " WHERE timestamp >= " + str(minTime) + ";"
+                query = cursor.execute(command)
+                dat = query.fetchall()
+                database.close()
+                data = {
+                'timestamp': np.fromiter((row[0] for row in dat), dtype=np.int64),
+                'avgHighPrice': np.fromiter((row[1] if row[1] is not None else np.nan for row in dat), dtype=np.float64),
+                'avgLowPrice':  np.fromiter((row[2] if row[2] is not None else np.nan for row in dat), dtype=np.float64),
+                'highPriceVolume':   np.fromiter((row[3] if row[3] is not None else 0 for row in dat), dtype=np.float64),
+                'lowPriceVolume':    np.fromiter((row[4] if row[4] is not None else 0 for row in dat), dtype=np.float64)
             }
+            else:
+                print(f"no table for {itemID}")
+                database.close()
+        elif timeFrame == "2w":
+            minTime = time.time() - 14*24*60*60 # 2 weeks ago
+            response = json.loads(net_request(self=self, url=("https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=1h&id=" + itemID), worker=worker).text).get("data")
+            for item in response:
+                if item.get("timestamp") < minTime:
+                    response.remove(item)
+                else:
+                    break
+            data = response
+        elif timeFrame == "3m":
+            minTime = time.time() - 90*24*60*60 # 3 months ago
+            response = json.loads(net_request(self=self, url=("https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=6h&id=" + itemID), worker=worker).text).get("data")
+            for item in response:
+                if item.get("timestamp") < minTime:
+                    response.remove(item)
+                else:
+                    break
+            data = response
+        elif timeFrame == "1y":
+            minTime = time.time() - 365*24*60*60 # 1 year ago
+            response = json.loads(net_request(self=self, url=("https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=24h&id=" + itemID), worker=worker).text).get("data")
+            for item in response:
+                if item.get("timestamp") < minTime:
+                    response.remove(item)
+                else:
+                    break
+            data = response
+        else:
+            print("Invalid time frame in plotprep")
+        if data is not None:
             df = pd.DataFrame(data)
+            df = df.fillna(np.nan)
             #convert to datetime
             local_tz = tz.tzlocal()
-            df['datetime'] = pd.to_datetime(df['time'], unit='s', utc = True).dt.tz_convert(local_tz)
+            df['datetime'] = pd.to_datetime(df['timestamp'], unit='s', utc = True).dt.tz_convert(local_tz)
 
             #Downsample / aggregate if dataset is large to keep interactive performance
             max_points = 3000
@@ -1203,7 +1876,7 @@ class MainWindow(QMainWindow):
                 vol_bins = f'{mins}min'
 
             try:
-                vol_group = df.set_index('datetime').resample(vol_bins).sum()[['highVol','lowVol']].reset_index()
+                vol_group = df.set_index('datetime').resample(vol_bins).sum()[['highPriceVolume','lowPriceVolume']].reset_index()
             except Exception:
                 vol_group = df[['datetime','highVol','lowVol']]
 
@@ -1212,7 +1885,7 @@ class MainWindow(QMainWindow):
             fig.add_trace(
                 go.Scattergl(
                     x=df_price['datetime'].to_numpy(),
-                    y=df_price['highPrice'].to_numpy(),
+                    y=df_price['avgHighPrice'].to_numpy(),
                     mode='lines+markers',
                     line=dict(color='orange', width=1),
                     connectgaps=True,
@@ -1223,7 +1896,7 @@ class MainWindow(QMainWindow):
             fig.add_trace(
                 go.Scattergl(
                     x=df_price['datetime'].to_numpy(),
-                    y=df_price['lowPrice'].to_numpy(),
+                    y=df_price['avgLowPrice'].to_numpy(),
                     mode='lines+markers',
                     line=dict(color='dodgerblue', width=1),
                     connectgaps=True,
@@ -1235,7 +1908,7 @@ class MainWindow(QMainWindow):
             fig.add_trace(
                 go.Bar(
                     x=vol_group['datetime'],
-                    y=vol_group['highVol'],
+                    y=vol_group['highPriceVolume'],
                     marker_color='orange',
                     name='highVol',
                     showlegend=False
@@ -1245,7 +1918,7 @@ class MainWindow(QMainWindow):
             fig.add_trace(
                 go.Bar(
                     x=vol_group['datetime'],
-                    y=vol_group['lowVol'],
+                    y=vol_group['lowPriceVolume'],
                     marker_color='dodgerblue',
                     name='lowVol',
                     showlegend=False
@@ -1269,14 +1942,13 @@ class MainWindow(QMainWindow):
             # Emit the prepared figure back to the main thread for rendering
             self.signals.graphReady.emit(fig)
         else:
-            print(f"no table for {itemID}")
-            database.close()
+            print("no data for plotPrep")
 
     def repairDB(self, repairList, worker = None):
         print("Starting DB repair...")
         itemLen = len(repairList)
-        worker.setStatusString("Updating price hisotry: 0/%d" % itemLen)
-        self.signals.newInProgressItem.emit(worker)
+        worker.updateStatus("workItem", [True, "Updating price history: 0/%d" % itemLen])
+        self.signals.statusChange.emit(worker)
         try:
             db = sqlite3.connect('database.db')
             cursor = db.cursor()
@@ -1286,12 +1958,15 @@ class MainWindow(QMainWindow):
                 if worker.is_killed:
                     print("stopping DB repair")
                     db.close()
+                    worker.updateStatus("workItem", [False, ""])
+                    self.signals.statusChange.emit(worker)
                     return None
                 tableName = "priceHistory5m.itemID" + item
                 lastEntryTime = repairList[item]
                 curTime = int(time.time())
                 if (curTime - lastEntryTime) > 60*5:  #if more than 5 minutes old
-                    response = json.loads(requests.get(priceHistory5mURL + ''.join(item), headers=headers).text).get('data')
+                    response = json.loads(net_request(self=self, url=(priceHistory5mURL + ''.join(item)), worker=worker).text).get('data')
+                    
                     for entry in response:
                         timestamp = entry.get('timestamp')
                         avgHighPrice = entry.get('avgHighPrice')
@@ -1303,31 +1978,50 @@ class MainWindow(QMainWindow):
                         db.commit()
                     time.sleep(1)
                 count = count + 1
-                worker.setStatusString("Updating price history: %d/%d" % (count, itemLen))
-                self.signals.newProgressUpdate.emit(worker)
+                worker.updateStatus("workItem", [True, "Updating price history: %d/%d" % (count, itemLen)])
+                self.signals.statusChange.emit(worker)
             db.close()
             print("DB repair complete")
-            worker.setStatusString("")
-            self.signals.inProgressItemComplete.emit(worker)
-            
-
+            worker.updateStatus("workItem", [False, ""])
+            self.signals.statusChange.emit(worker)
         except Exception as e:
             print("error in repairDB")
             print(e)
 
     def closeEvent(self, event):
         print("Window close event triggered!")
+        # Save current window state
+        applicationState = {"windowGeometry": self.saveGeometry().data().hex(), 
+         "windowState": self.saveState().data().hex(),
+         "alertSplitterState": self.ui.alert_page_splitter.saveState().data().hex(),
+         "page": self.ui.main_stack_widget.currentIndex()}
+        
+        with open(lastState, "w") as f:
+            json.dump(applicationState, f)
+            print("Application state saved")
+
         super().closeEvent(event)
+        for worker in get_active_workers_snapshot():
+            try:
+                worker.kill()
+            except Exception as e:
+                print("worker ", worker)
+                print("Exception ", e)
         print(event)
 
     def showEvent(self, event):
         print("MainWindow.showEvent()")
-        traceback.print_stack(limit=10)
         super().showEvent(event)
+
+    def resizeEvent(self, event):
+        """Handle window resize to reposition sidebar"""
+        super().resizeEvent(event)
+        # Reposition the sidebar when the main widget is resized
+        if hasattr(self, 'sidebar'):
+            self.sidebar.position_sidebar()
 
     def hideEvent(self, event):
         print("MainWindow.hideEvent()")
-        traceback.print_stack(limit=10)
         super().hideEvent(event)
 
     def changeEvent(self, event):
@@ -1347,13 +2041,29 @@ if __name__ == "__main__":
         with open("theme.qss") as theme:
             theme_str = theme.read()
             app.setStyleSheet(theme_str)
-            print(app.styleSheet)
+            print("Loaded stylesheet length:", len(theme_str))
+            print("Preview:", theme_str[:200].replace("\n"," "))
         
         if not hasattr(app, "main_window"):
             app.main_window = MainWindow()
         window = app.main_window
 
         print("About to show window")
+        # check if last state is saved and attempt to restore it if so
+
+        if os.path.isfile(lastState):
+            try:
+                with open(lastState, "r") as f:
+                    applicationState = json.load(f)
+                    window.restoreGeometry(QByteArray.fromHex(applicationState.get("windowGeometry").encode()))
+                    window.restoreState(QByteArray.fromHex(applicationState.get("windowState").encode()))
+                    window.ui.alert_page_splitter.restoreState(QByteArray.fromHex(applicationState.get("alertSplitterState").encode()))
+                    window.ui.main_stack_widget.setCurrentIndex(applicationState.get("page"))
+                    print("Restored application state from last session")
+            except Exception as e:
+                print("Error restoring application state:", e)
+
+
         window.show()
         
         # debug: print top-level widgets now and in 1s
