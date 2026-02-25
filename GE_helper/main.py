@@ -880,6 +880,7 @@ class MainWindow(QMainWindow):
 
     def newItem(self, itemID):
         print("new item received:", itemID)
+        self.currentItemID = itemID
         self.updateGraphPage(itemID)
         item = list(filter(lambda tup: itemID in tup, self.localList))
         if len(item) > 1:
@@ -1403,7 +1404,10 @@ class MainWindow(QMainWindow):
             if query.fetchone() == None:
                 command = "CREATE TABLE " + tableName + " " + priceHistory5mValues
                 cursor.execute(command)
-                response = json.loads(net_request(self=self, url=(priceHistory5mURL + ''.join(str(value) for value in id)), worker=worker).text).get('data')
+                try:
+                    response = json.loads(net_request(self=self, url=(priceHistory5mURL + ''.join(str(value) for value in id)), worker=worker).text).get('data')
+                except Exception as e:
+                    print(f"Failed to retrieve 5m price: {e}")
                 for item in response:
                     timestamp = item.get('timestamp')
                     avgHighPrice = item.get('avgHighPrice')
@@ -1442,7 +1446,10 @@ class MainWindow(QMainWindow):
         while True:
             if worker.is_killed:
                 break
-            response = json.loads(net_request(self=self, url=latestURL, worker=worker).text)
+            try:
+                response = json.loads(net_request(self=self, url=latestURL, worker=worker).text)
+            except Exception as e:
+                print(f"Failed to retrieve latest price: {e}")
             try:
                 data = response.get("data")
                 database = sqlite3.connect('database.db')
@@ -1488,7 +1495,10 @@ class MainWindow(QMainWindow):
                 database = sqlite3.connect('database.db')
                 cursor = database.cursor()
                 cursor.execute("ATTACH 'priceHistory5m.db' AS priceHistory5m")
-                response = json.loads(net_request(self=self, url=latest5mURL, worker=worker).text)
+                try:
+                    response = json.loads(net_request(self=self, url=latest5mURL, worker=worker).text)
+                except Exception as e:
+                    print(f"Failed to retrieve 5m price: {e}")
                 if response.get('timestamp') > lastUpdate:
                     lastUpdate = response.get('timestamp')
                     print(lastUpdate)
@@ -1817,7 +1827,10 @@ class MainWindow(QMainWindow):
                 database.close()
         elif timeFrame == "2w":
             minTime = time.time() - 14*24*60*60 # 2 weeks ago
-            response = json.loads(net_request(self=self, url=("https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=1h&id=" + itemID), worker=worker).text).get("data")
+            try:
+                response = json.loads(net_request(self=self, url=("https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=1h&id=" + itemID), worker=worker).text).get("data")
+            except Exception as e:
+                print(f"Failed to retrieve 1h timeseries: {e}")
             for item in response:
                 if item.get("timestamp") < minTime:
                     response.remove(item)
@@ -1826,7 +1839,10 @@ class MainWindow(QMainWindow):
             data = response
         elif timeFrame == "3m":
             minTime = time.time() - 90*24*60*60 # 3 months ago
-            response = json.loads(net_request(self=self, url=("https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=6h&id=" + itemID), worker=worker).text).get("data")
+            try:
+                response = json.loads(net_request(self=self, url=("https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=6h&id=" + itemID), worker=worker).text).get("data")
+            except Exception as e:
+                print(f"Failed to retrieve 6h timeseries: {e}")
             for item in response:
                 if item.get("timestamp") < minTime:
                     response.remove(item)
@@ -1835,7 +1851,10 @@ class MainWindow(QMainWindow):
             data = response
         elif timeFrame == "1y":
             minTime = time.time() - 365*24*60*60 # 1 year ago
-            response = json.loads(net_request(self=self, url=("https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=24h&id=" + itemID), worker=worker).text).get("data")
+            try:
+                response = json.loads(net_request(self=self, url=("https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=24h&id=" + itemID), worker=worker).text).get("data")
+            except Exception as e:
+                print(f"Failed to retrieve 24h timeseries: {e}")
             for item in response:
                 if item.get("timestamp") < minTime:
                     response.remove(item)
@@ -1965,8 +1984,10 @@ class MainWindow(QMainWindow):
                 lastEntryTime = repairList[item]
                 curTime = int(time.time())
                 if (curTime - lastEntryTime) > 60*5:  #if more than 5 minutes old
-                    response = json.loads(net_request(self=self, url=(priceHistory5mURL + ''.join(item)), worker=worker).text).get('data')
-                    
+                    try:
+                        response = json.loads(net_request(self=self, url=(priceHistory5mURL + ''.join(item)), worker=worker).text).get('data')
+                    except Exception as e:
+                        print(f"Failed to retrieve latest 5m timeseries: {e}")
                     for entry in response:
                         timestamp = entry.get('timestamp')
                         avgHighPrice = entry.get('avgHighPrice')
