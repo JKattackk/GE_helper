@@ -33,28 +33,28 @@ from sidebar import SideBar
 #pyuic6 -o .\GE_helper\historyBarOutput.py .\GE_helper\historyBar.ui 
 
 # URLS for API calls
-itemListURL = "https://chisel.weirdgloop.org/gazproj/gazbot/os_dump.json"
-priceHistory5mURL =  "https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=5m&id="
-latest5mURL = "https://prices.runescape.wiki/api/v1/osrs/5m"
-itemLookupURL = "https://www.ge-tracker.com/item/"
-itemIconURL = "https://secure.runescape.com/m=itemdb_rs/obj_sprite.gif?id="
-latestURL = "https://prices.runescape.wiki/api/v1/osrs/latest"
+itemListURL = "https://chisel.weirdgloop.org/gazproj/gazbot/rs_dump.json"
+priceHistory5mURL =  "https://prices.runescape.wiki/api/v1/osrs/timeseries?timestep=5m&id=" **change**
+latest5mURL = "https://prices.runescape.wiki/api/v1/osrs/5m"**change**
+itemLookupURL = "https://www.ge-tracker.com/item/"**change**
+itemIconURL = "https://secure.runescape.com/m=itemdb_rs/obj_sprite.gif?id="**change**
+latestURL = "https://prices.runescape.wiki/api/v1/osrs/latest"**change**
 headers = {
     'User-Agent': 'GE price trend tracking wip discord @kat6541'
 }
 
-web_lookup_url = "https://www.ge-tracker.com/item/"
+web_lookup_url = "https://www.ge-tracker.com/item/"**change**
 
 # database table schemas
 filteredItemListValues = "(id INTEGER PRIMARY KEY, itemName, buyLimit, lowPrice, highPrice, value, highAlch, lowVolume, highVolume, lowPriceChange, highPriceChange, lowVolumeChange, highVolumeChange, timestamp, tracked)"
 priceHistory5mValues = "(timeStamp INTEGER NOT NULL PRIMARY KEY, avgLowPrice, avgHighPrice, lowPriceVolume, highPriceVolume)"
 
 # config file paths
-alertConfigFile = "cfg/alertConfig.json"
-filterConfigFile = "cfg/filterConfig.json"
-quickAlertMuteFile = "cfg/quickAlertMute.json"
-alertMuteFile = "cfg/alertMute.json"
-lastState = "cfg/stateMemory.json"
+alertConfigFile = "rscfg/alertConfig.json"
+filterConfigFile = "rscfg/filterConfig.json"
+quickAlertMuteFile = "rscfg/quickAlertMute.json"
+alertMuteFile = "rscfg/alertMute.json"
+lastState = "rscfg/stateMemory.json"
 
 ## default item filter values
 def_minBuyLimitValue = 2000000
